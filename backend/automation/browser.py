@@ -555,104 +555,133 @@ async def extract_morada_leads(period: str = "24h", custom_range: dict = None, s
                 _log_progress('error', f'Falha ao iniciar headless: {headless_err}')
                 raise Exception(f"Falha ao iniciar Chromium headless: {headless_err}")
         else:
-            # ═══ FASE 1: OBTER NAVEGADOR ═══
-            browser_info = get_browser_paths(preferred_browser)
-            _log_progress('starting', f'Abrindo navegador ({preferred_browser})...')
-            if not browser_info:
-                raise Exception("Nenhum navegador suportado (Chrome ou Edge) foi encontrado!")
-                
-            b_type = browser_info["type"].upper()
-            b_exe = browser_info["exe"]
-            b_profile = browser_info["profile"]
-            b_proc = browser_info["process_name"]
-            
-            # ═══ FASE 2: ABRIR CHROME COM PERFIL PRINCIPAL DO USUÁRIO ═══
-            # Usa launch_persistent_context com o perfil real do Chrome do usuário.
-            # Isso garante que: cookies, sessões, localStorage, fingerprint, e o Cloudflare
-            # Turnstile funcionem exatamente como no Chrome normal do usuário.
-            chrome_user_data = b_profile  # Ex: %LOCALAPPDATA%\Google\Chrome\User Data
-            
-            diag_print(f"🚀 Abrindo Chrome com perfil principal do usuário: {chrome_user_data}")
-            
-            # Fecha o Chrome se estiver aberto (necessário para usar o perfil)
-            diag_print(f"🔒 Verificando se {b_proc} está em execução...")
+        else:
+            # ═══ FASE 1: TENTAR CONECTAR AO CHROME EXISTENTE (via CDP 9333) ═══
+            _log_progress('starting', 'Procurando Chrome aberto na porta 9333...')
             try:
-                result = subprocess.run(
-                    ["tasklist", "/FI", f"IMAGENAME eq {b_proc}"],
-                    capture_output=True, text=True, shell=True
-                )
-                if b_proc.lower() in result.stdout.lower():
-                    diag_print(f"⚠️ {b_proc} está aberto. Fechando para liberar o perfil...")
-                    subprocess.run(["taskkill", "/F", "/IM", b_proc, "/T"], capture_output=True, shell=True)
-                    await asyncio.sleep(4)
-                    # Verifica se realmente fechou
-                    result2 = subprocess.run(
+                browser = await pw.chromium.connect_over_cdp('http://localhost:9333', timeout=3000)
+                diag_print("✅ Conectado ao Chrome existente na porta 9333!")
+                is_cdp = True
+                
+                # Procura a aba do Morada AI
+                contexts = browser.contexts
+                if contexts:
+                    for p in contexts[0].pages:
+                        if "morada.ai" in p.url:
+                            page = p
+                            break
+                    if not page:
+                        page = contexts[0].pages[0]
+                
+                # Se não estiver na página do Morada, navega
+                if "morada.ai" not in page.url:
+                    diag_print("🌐 Navegando para https://app.morada.ai/conversations na aba atual...")
+                    await page.goto("https://app.morada.ai/conversations", timeout=60000, wait_until="domcontentloaded")
+                
+                try:
+                    await page.bring_to_front()
+                except:
+                    pass
+            except Exception as cdp_err:
+                diag_print(f"⚠️ Chrome na porta 9333 não encontrado ({cdp_err}). Iniciando modo autônomo...")
+                is_cdp = False
+            
+            if not is_cdp:
+                # ═══ FASE 1.5: OBTER NAVEGADOR (Modo Autônomo) ═══
+                browser_info = get_browser_paths(preferred_browser)
+                _log_progress('starting', f'Abrindo navegador ({preferred_browser})...')
+                if not browser_info:
+                    raise Exception("Nenhum navegador suportado (Chrome ou Edge) foi encontrado!")
+                    
+                b_type = browser_info["type"].upper()
+                b_exe = browser_info["exe"]
+                b_profile = browser_info["profile"]
+                b_proc = browser_info["process_name"]
+                
+                # ═══ FASE 2: ABRIR CHROME COM PERFIL PRINCIPAL DO USUÁRIO ═══
+                chrome_user_data = b_profile  # Ex: %LOCALAPPDATA%\Google\Chrome\User Data
+                
+                diag_print(f"🚀 Verificando Chrome com perfil principal do usuário: {chrome_user_data}")
+                
+                # Fecha o Chrome se estiver aberto (necessário para extrair cookies/perfil)
+                diag_print(f"🔒 Verificando se {b_proc} está em execução...")
+                try:
+                    result = subprocess.run(
                         ["tasklist", "/FI", f"IMAGENAME eq {b_proc}"],
                         capture_output=True, text=True, shell=True
                     )
-                    if b_proc.lower() in result2.stdout.lower():
-                        diag_print(f"⚠️ {b_proc} ainda em execução. Tentando novamente...")
+                    if b_proc.lower() in result.stdout.lower():
+                        diag_print(f"⚠️ {b_proc} está aberto. Fechando para liberar o perfil...")
                         subprocess.run(["taskkill", "/F", "/IM", b_proc, "/T"], capture_output=True, shell=True)
-                        await asyncio.sleep(5)
-                    diag_print(f"✅ {b_proc} fechado com sucesso.")
-                else:
-                    diag_print(f"✅ {b_proc} não está em execução.")
-            except Exception as kill_err:
-                diag_print(f"⚠️ Erro ao verificar/fechar {b_proc}: {kill_err}")
-            
-            # Remove lock files do Chrome que impedem o Playwright de abrir o perfil
-            for lock_file in ["SingletonLock", "SingletonCookie", "SingletonSocket"]:
-                lock_path = os.path.join(chrome_user_data, lock_file)
-                try:
-                    if os.path.exists(lock_path):
-                        os.remove(lock_path)
-                        diag_print(f"🗑️ Lock file removido: {lock_file}")
-                except Exception:
-                    pass
-            
-            # Extrai cookies nativos do usuário invisivelmente
-            diag_print("🍪 Extraindo sessão ativa do navegador (browser_cookie3)...")
-            try:
-                import browser_cookie3
-                cj = browser_cookie3.chrome(domain_name='morada.ai')
-                cookies = [{'name': c.name, 'value': c.value, 'domain': c.domain, 'path': c.path, 'secure': bool(c.secure)} for c in cj]
-            except Exception as e:
-                diag_print(f"⚠️ Aviso ao extrair cookies do Chrome: {e}. Tentando Edge...")
+                        await asyncio.sleep(4)
+                        # Verifica se realmente fechou
+                        result2 = subprocess.run(
+                            ["tasklist", "/FI", f"IMAGENAME eq {b_proc}"],
+                            capture_output=True, text=True, shell=True
+                        )
+                        if b_proc.lower() in result2.stdout.lower():
+                            diag_print(f"⚠️ {b_proc} ainda em execução. Tentando novamente...")
+                            subprocess.run(["taskkill", "/F", "/IM", b_proc, "/T"], capture_output=True, shell=True)
+                            await asyncio.sleep(5)
+                        diag_print(f"✅ {b_proc} fechado com sucesso.")
+                    else:
+                        diag_print(f"✅ {b_proc} não está em execução.")
+                except Exception as kill_err:
+                    diag_print(f"⚠️ Erro ao verificar/fechar {b_proc}: {kill_err}")
+                
+                # Remove lock files do Chrome que impedem o Playwright de abrir o perfil
+                for lock_file in ["SingletonLock", "SingletonCookie", "SingletonSocket"]:
+                    lock_path = os.path.join(chrome_user_data, lock_file)
+                    try:
+                        if os.path.exists(lock_path):
+                            os.remove(lock_path)
+                            diag_print(f"🗑️ Lock file removido: {lock_file}")
+                    except Exception:
+                        pass
+                
+                # Extrai cookies nativos do usuário invisivelmente
+                diag_print("🍪 Extraindo sessão ativa do navegador (browser_cookie3)...")
                 try:
                     import browser_cookie3
-                    cj = browser_cookie3.edge(domain_name='morada.ai')
+                    cj = browser_cookie3.chrome(domain_name='morada.ai')
                     cookies = [{'name': c.name, 'value': c.value, 'domain': c.domain, 'path': c.path, 'secure': bool(c.secure)} for c in cj]
-                except Exception as e2:
-                    diag_print(f"⚠️ Erro ao extrair cookies do Edge: {e2}")
-                    cookies = []
-            
-            # Abre um navegador limpo VISÍVEL
-            diag_print("🚀 Iniciando motor Playwright limpo (sem conflitos com pasta do usuário)...")
-            browser = await pw.chromium.launch(
-                headless=False,
-                args=[
-                    "--start-maximized",
-                    "--disable-blink-features=AutomationControlled",
-                    "--disable-infobars",
-                ]
-            )
-            context = await browser.new_context(no_viewport=True)
-            
-            # Injeta cookies
-            if cookies:
-                diag_print(f"✅ Injetando {len(cookies)} cookies na sessão do robô...")
-                await context.add_cookies(cookies)
-            
-            page = await context.new_page()
-            
-            try:
-                await page.bring_to_front()
-            except:
-                pass
-            
-            diag_print(f"🌐 Navegando para https://app.morada.ai/conversations...")
-            await page.goto("https://app.morada.ai/conversations", timeout=60000, wait_until="domcontentloaded")
-            await asyncio.sleep(3)
+                except Exception as e:
+                    diag_print(f"⚠️ Aviso ao extrair cookies do Chrome: {e}. Tentando Edge...")
+                    try:
+                        import browser_cookie3
+                        cj = browser_cookie3.edge(domain_name='morada.ai')
+                        cookies = [{'name': c.name, 'value': c.value, 'domain': c.domain, 'path': c.path, 'secure': bool(c.secure)} for c in cj]
+                    except Exception as e2:
+                        diag_print(f"⚠️ Erro ao extrair cookies do Edge: {e2}")
+                        cookies = []
+                
+                # Abre um navegador limpo VISÍVEL
+                diag_print("🚀 Iniciando motor Playwright limpo (sem conflitos com pasta do usuário)...")
+                browser = await pw.chromium.launch(
+                    headless=False,
+                    args=[
+                        "--start-maximized",
+                        "--disable-blink-features=AutomationControlled",
+                        "--disable-infobars",
+                    ]
+                )
+                context = await browser.new_context(no_viewport=True)
+                
+                # Injeta cookies
+                if cookies:
+                    diag_print(f"✅ Injetando {len(cookies)} cookies na sessão do robô...")
+                    await context.add_cookies(cookies)
+                
+                page = await context.new_page()
+                
+                try:
+                    await page.bring_to_front()
+                except:
+                    pass
+                
+                diag_print(f"🌐 Navegando para https://app.morada.ai/conversations...")
+                await page.goto("https://app.morada.ai/conversations", timeout=60000, wait_until="domcontentloaded")
+                await asyncio.sleep(3)
         
         # ═══ FASE 3.5: LOGIN AUTOMÁTICO NO MORADA ═══
         cur_url = page.url
