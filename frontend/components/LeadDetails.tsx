@@ -288,6 +288,18 @@ export default function LeadDetails({ lead, onClose, onStatusChange }: { lead: a
               <div className="flex flex-col gap-5">
                 <div className="bg-white/[0.02] border border-white/[0.05] rounded-xl overflow-hidden">
                   <div className="px-5 py-3 border-b border-white/[0.02] flex items-center gap-2 bg-white/[0.01]">
+                    <span className="text-slate-400">🔍</span>
+                    <h4 className="text-xs uppercase font-bold text-slate-300 tracking-wider">Diagnóstico Moura Leite</h4>
+                  </div>
+                  <div className="p-5">
+                    <p className="text-slate-200 text-sm leading-relaxed break-words">
+                      {lead.porque || 'Chave de IA não configurada.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-white/[0.02] border border-white/[0.05] rounded-xl overflow-hidden">
+                  <div className="px-5 py-3 border-b border-white/[0.02] flex items-center gap-2 bg-white/[0.01]">
                     <span className="text-slate-400">💬</span>
                     <h4 className="text-xs uppercase font-bold text-slate-300 tracking-wider">Mensagem de Prova (Contexto)</h4>
                   </div>
@@ -297,18 +309,6 @@ export default function LeadDetails({ lead, onClose, onStatusChange }: { lead: a
                         "{lead.mensagem_prova || lead.ultima_mensagem_lead || 'Aguardando auditoria completa.'}"
                       </p>
                     </div>
-                  </div>
-                </div>
-
-                <div className="bg-white/[0.02] border border-white/[0.05] rounded-xl overflow-hidden">
-                  <div className="px-5 py-3 border-b border-white/[0.02] flex items-center gap-2 bg-white/[0.01]">
-                    <span className="text-slate-400">🔍</span>
-                    <h4 className="text-xs uppercase font-bold text-slate-300 tracking-wider">Diagnóstico Moura Leite</h4>
-                  </div>
-                  <div className="p-5">
-                    <p className="text-slate-200 text-sm leading-relaxed break-words">
-                      {lead.porque || 'Chave de IA não configurada.'}
-                    </p>
                   </div>
                 </div>
 
@@ -382,15 +382,15 @@ export default function LeadDetails({ lead, onClose, onStatusChange }: { lead: a
                   </div>
                 )}
 
-                {st !== 'saudável' && (
-                  <button
-                    onClick={() => handleStatusChange('Saudável')}
-                    disabled={saving}
-                    className="mt-2 text-xs font-bold uppercase tracking-wider bg-white/5 border border-white/10 hover:bg-emerald-600/20 hover:border-emerald-500/30 text-slate-300 hover:text-emerald-400 px-5 py-4 rounded-xl transition-all w-full text-center"
-                  >
-                    {saving ? '⏳ Salvando...' : '✓ Marcar auditoria como Resolvida (Saudável)'}
-                  </button>
-                )}
+                  {st !== 'saudável' && (
+                    <button
+                      onClick={() => handleStatusChange('Saudável')}
+                      disabled={saving}
+                      className="mt-4 self-center w-max text-[10px] font-bold uppercase tracking-widest bg-white/5 border border-white/10 hover:bg-emerald-600/20 hover:border-emerald-500/30 text-slate-400 hover:text-emerald-400 px-6 py-2.5 rounded-lg transition-all"
+                    >
+                      {saving ? '⏳ Salvando...' : '✓ Marcar como Resolvida (Saudável)'}
+                    </button>
+                  )}
               </div>
             )}
 

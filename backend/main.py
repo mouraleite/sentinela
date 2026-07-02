@@ -331,10 +331,12 @@ def update_lead_status(nome: str, payload: dict, username: str = None):
 @app.post("/api/scan")
 async def trigger_scan_route(data: dict, background_tasks: BackgroundTasks):
     global global_scan_lock
+    print(f"[API] Recebeu request POST /api/scan com payload: {data}")
     
     # Proteção contra scan duplo
     _check_scan_timeout()
     if global_scan_lock["is_locked"]:
+        print(f"[API] Negado: Scan já em andamento por {global_scan_lock.get('locked_by')}")
         return {
             "status": "already_running", 
             "message": f"Scan já em andamento por {global_scan_lock.get('locked_by', '?')}",
@@ -382,14 +384,7 @@ async def trigger_scan_route(data: dict, background_tasks: BackgroundTasks):
             global_scan_lock = {"is_locked": False, "locked_by": None, "timestamp": None, "error": None}
             firebase_db.update_system_lock(False)
             
-            # Dispara sincronização de leads para a nuvem lendo do JSON local agregado
-            user_file = get_auditorias_file(requested_by)
-            db_data = safe_read_json(user_file, {"auditores": []})
-            all_leads = []
-            for auditoria in db_data.get("auditores", []):
-                all_leads.extend(auditoria.get("leads", []))
-            if all_leads:
-                firebase_db.sync_leads_to_firebase(all_leads, username=requested_by)
+            # Bulk sync removido para não reviver leads deletados do dash.
             
         except Exception as e:
             error_detail = f"{type(e).__name__}: {str(e)}"
@@ -583,107 +578,16 @@ async def on_startup():
                             
             leads_list = list(all_leads.values())
             if leads_list:
-                print(f"[INIT] Sincronizando {len(leads_list)} leads locais com o Firestore...")
-                firebase_db.sync_leads_to_firebase(leads_list, username="Sistema")
+                print(f"[INIT] {len(leads_list)} leads locais encontrados no histórico. Bulk sync desativado para o dash.")
         except Exception as e:
             print(f"[INIT] Erro no sync histórico de boot: {e}")
 
     threading.Thread(target=sync_local_history_on_boot, daemon=True).start()
 
-    def start_firebase_listener():
-        db = firebase_db.get_db()
-        if not db: return
-        
-        def on_snapshot(col_snapshot, changes, read_time):
-            for change in changes:
-                if change.type.name == 'ADDED':
-                    doc = change.document.to_dict()
-                    doc_id = change.document.id
-                    if doc.get('status') == 'pending' and doc.get('command') == 'scan':
-                        # Se o comando de scan for mais antigo que 5 minutos, ignora
-                        cmd_timestamp = doc.get('timestamp')
-                        if cmd_timestamp:
-                            now_ms = time.time() * 1000
-                            # 5 minutos = 300.000 milissegundos
-                            if now_ms - cmd_timestamp > 300000:
-                                print(f"[FIREBASE] Comando de scan {doc_id} ignorado (muito antigo).")
-                                change.document.reference.update({'status': 'ignored'})
-                                continue
-                                
-                        print(f"[FIREBASE] Comando de scan recebido da nuvem: {doc_id}")
-                        change.document.reference.update({'status': 'processing'})
-                        # Simula um request para o trigger_scan_route
-                        data = {
-                            "username": doc.get("username", "Sistema"),
-                            "period": doc.get("period", "24h")
-                        }
-                        async def process_scan():
-                            # Usa lock para garantir que apenas um scan roda por vez
-                            async with firebase_scan_lock:
-                                scan_id = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-                                print(f"[SENTINELA] 🚀 MASTER SCAN (FIREBASE) INICIADO por {data['username']}")
-                                firebase_db.update_system_lock(True, data['username'])
-                                
-                                try:
-                                    await extract_morada_leads(data["period"], None, scan_id, username=data["username"], force_headless=False)
-                                    print(f"[SENTINELA] ✅ SCAN (FIREBASE) CONCLUÍDO")
-                                    firebase_db.update_system_lock(False)
-                                    
-                                    # Sincroniza leads
-                                    user_file = get_auditorias_file(data["username"])
-                                    db_data = safe_read_json(user_file, {"auditores": []})
-                                    all_leads = []
-                                    for auditoria in db_data.get("auditores", []):
-                                        all_leads.extend(auditoria.get("leads", []))
-                                    if all_leads:
-                                        firebase_db.sync_leads_to_firebase(all_leads, username=data["username"])
-                                except Exception as e:
-                                    print(f"[SENTINELA] ❌ ERRO NO SCAN (FIREBASE): {e}")
-                                    firebase_db.update_system_lock(False, error=str(e))
-                                finally:
-                                    change.document.reference.update({'status': 'completed'})
-                                
-                        asyncio.run_coroutine_threadsafe(process_scan(), main_loop)
-
-                    elif doc.get('status') == 'pending' and doc.get('command') == 'clear':
-                        print(f"[FIREBASE] Comando de limpeza recebido: {doc_id}")
-                        change.document.reference.update({'status': 'processing'})
-                        try:
-                            import glob
-                            # 1. Limpa todos os arquivos JSON locais
-                            safe_write_json(AUDITORIAS_FILE, {"auditores": []})
-                            pattern = os.path.join(DATA_DIR, "auditorias_*.json")
-                            for filepath in glob.glob(pattern):
-                                safe_write_json(filepath, {"auditores": []})
-                            print("[FIREBASE] Arquivos JSON locais limpos!")
-
-                            # 2. Limpa leads no Firestore
-                            fdb = firebase_db.get_db()
-                            if fdb:
-                                leads_ref = fdb.collection('leads')
-                                docs_to_del = leads_ref.list_documents()
-                                batch = fdb.batch()
-                                count = 0
-                                for d in docs_to_del:
-                                    batch.delete(d)
-                                    count += 1
-                                    if count >= 400:
-                                        batch.commit()
-                                        batch = fdb.batch()
-                                        count = 0
-                                if count > 0:
-                                    batch.commit()
-                                print("[FIREBASE] Leads limpos no Firestore via comando!")
-                        except Exception as clear_err:
-                            print(f"[FIREBASE] Erro ao processar comando clear: {clear_err}")
-                        finally:
-                            change.document.reference.update({'status': 'completed'})
-
-        col_query = db.collection('commands').where('status', '==', 'pending')
-        col_query.on_snapshot(on_snapshot)
-        print("[FIREBASE] Listener de comandos iniciado!")
-        
-    start_firebase_listener()
+    try:
+        firebase_db.start_firebase_listener()
+    except Exception as e:
+        print(f"[FIREBASE] Erro ao iniciar listener REST: {e}")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))

@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import AuraIsland from '../../components/AuraIsland';
-import { ShieldCheck, Cpu, Database, Save, RotateCcw, Zap, Shield, Scan, Monitor } from 'lucide-react';
+import { ShieldCheck, Cpu, Database, Save, RotateCcw, Zap, Shield, Monitor, ChevronDown, ChevronUp } from 'lucide-react';
 
 export default function SettingsPage() {
   const [config, setConfig] = useState({
@@ -19,6 +19,8 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [activeSection, setActiveSection] = useState('browser');
 
   const API_BASE = '/api';
 
@@ -35,6 +37,15 @@ export default function SettingsPage() {
       } catch (e) {
         console.error(e);
       }
+      
+      const userStr = localStorage.getItem('sentinela_user');
+      if (userStr) {
+        try {
+          const u = JSON.parse(userStr);
+          setIsAdmin(u.role === 'admin' || u.username === 'admin');
+        } catch (e) {}
+      }
+      
       setLoading(false);
     };
     load();
@@ -78,226 +89,269 @@ export default function SettingsPage() {
           <div className="h-0.5 flex-1 bg-gradient-to-r from-blue-500/50 to-transparent hidden md:block mb-3 mx-8" />
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* NAVEGADOR PREFERIDO */}
-          <div className="bg-gradient-to-br from-blue-600/10 via-transparent to-transparent border border-blue-500/20 p-8 rounded-3xl relative overflow-hidden group col-span-1 lg:col-span-2">
-            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity text-blue-500">
-                <Monitor size={80} />
-            </div>
+        <div className="flex flex-col gap-4 mb-8">
+          
+          {/* NAVEGADOR PREFERIDO (ALL) */}
+          <div className="bg-gradient-to-br from-blue-600/10 via-transparent to-transparent border border-blue-500/20 rounded-3xl relative overflow-hidden group">
+            <button 
+              onClick={() => setActiveSection(activeSection === 'browser' ? '' : 'browser')}
+              className="w-full p-6 flex items-center justify-between transition-all hover:bg-white/[0.02]"
+            >
+               <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400">
+                     <Monitor size={16} />
+                  </div>
+                  <h3 className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Navegador para Scan</h3>
+               </div>
+               {activeSection === 'browser' ? <ChevronUp size={16} className="text-slate-500" /> : <ChevronDown size={16} className="text-slate-500" />}
+            </button>
             
-            <div className="flex flex-col md:flex-row items-start justify-between gap-8 relative z-10">
-               <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-4">
-                     <div className="w-8 h-8 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400">
-                        <Monitor size={16} />
-                     </div>
-                     <h3 className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Navegador para Scan</h3>
-                  </div>
-                  <p className="text-[10px] text-slate-400 font-medium leading-relaxed mb-6 max-w-xl">
-                     Escolha qual navegador o Sentinela deve usar para abrir o Morada AI e fazer a auditoria. O sistema usará o perfil real do navegador (onde você já está logado).
-                  </p>
-                  
-                  <div className="flex flex-wrap gap-3">
-                    {[
-                      { value: 'auto', label: 'Automático', desc: 'Detecta automaticamente' },
-                      { value: 'chrome', label: 'Google Chrome', desc: 'Prioriza Chrome' },
-                      { value: 'edge', label: 'Microsoft Edge', desc: 'Prioriza Edge' },
-                    ].map((opt) => (
-                      <button
-                        key={opt.value}
-                        onClick={() => setConfig({...config, preferred_browser: opt.value})}
-                        className={`px-6 py-4 rounded-2xl border transition-all text-left ${
-                          config.preferred_browser === opt.value 
-                            ? 'bg-blue-600/20 border-blue-500/50 shadow-lg shadow-blue-600/10' 
-                            : 'bg-black/30 border-white/5 hover:border-white/10'
-                        }`}
-                      >
-                        <span className={`block text-[10px] font-black uppercase tracking-widest mb-1 ${
-                          config.preferred_browser === opt.value ? 'text-blue-400' : 'text-slate-400'
-                        }`}>{opt.label}</span>
-                        <span className="block text-[8px] font-bold text-slate-600 uppercase tracking-wider">{opt.desc}</span>
-                      </button>
-                    ))}
-                  </div>
-               </div>
-               
-               <div className="w-full md:w-[300px] bg-black/40 border border-white/5 p-6 rounded-[2rem] backdrop-blur-sm">
-                  <h4 className="text-[8px] font-black text-blue-400 uppercase tracking-widest mb-4">Como funciona:</h4>
-                  <ul className="text-[9px] text-slate-500 space-y-3 font-bold uppercase tracking-[0.05em]">
-                     <li className="flex gap-2">
-                        <span className="text-blue-500">01.</span>
-                        <span>O <span className="text-slate-300">backend local</span> roda no seu PC.</span>
-                     </li>
-                     <li className="flex gap-2">
-                        <span className="text-blue-500">02.</span>
-                        <span>Ao clicar <span className="text-slate-300">Master Scan</span>, ele abre o navegador.</span>
-                     </li>
-                     <li className="flex gap-2">
-                        <span className="text-blue-500">03.</span>
-                        <span>Usa seu <span className="text-slate-300">perfil logado</span> no Morada AI.</span>
-                     </li>
-                     <li className="flex gap-2">
-                        <span className="text-blue-500">04.</span>
-                        <span>O navegador <span className="text-slate-300">fecha em 2 min</span> após o scan.</span>
-                     </li>
-                  </ul>
-               </div>
-            </div>
+            {activeSection === 'browser' && (
+              <div className="px-6 pb-6 relative z-10">
+                 <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none text-blue-500 hidden md:block">
+                     <Monitor size={80} />
+                 </div>
+                 <div className="flex flex-col md:flex-row items-start justify-between gap-8 mt-2">
+                    <div className="flex-1">
+                       <p className="text-[10px] text-slate-400 font-medium leading-relaxed mb-6 max-w-xl">
+                          Escolha qual navegador o Sentinela deve usar para abrir o Morada AI e fazer a auditoria. O sistema usará o perfil real do navegador (onde você já está logado).
+                       </p>
+                       
+                       <div className="flex flex-wrap gap-3">
+                         {[
+                           { value: 'auto', label: 'Automático', desc: 'Detecta automaticamente' },
+                           { value: 'chrome', label: 'Google Chrome', desc: 'Prioriza Chrome' },
+                           { value: 'edge', label: 'Microsoft Edge', desc: 'Prioriza Edge' },
+                         ].map((opt) => (
+                           <button
+                             key={opt.value}
+                             onClick={() => setConfig({...config, preferred_browser: opt.value})}
+                             className={`px-6 py-4 rounded-2xl border transition-all text-left ${
+                               config.preferred_browser === opt.value 
+                                 ? 'bg-blue-600/20 border-blue-500/50 shadow-lg shadow-blue-600/10' 
+                                 : 'bg-black/30 border-slate-700 hover:border-white/30 hover:bg-white/5'
+                             }`}
+                           >
+                             <span className={`block text-[10px] font-black uppercase tracking-widest mb-1 ${
+                               config.preferred_browser === opt.value ? 'text-blue-400' : 'text-slate-400'
+                             }`}>{opt.label}</span>
+                             <span className="block text-[8px] font-bold text-slate-600 uppercase tracking-wider">{opt.desc}</span>
+                           </button>
+                         ))}
+                       </div>
+                    </div>
+                    
+                    <div className="w-full md:w-[300px] bg-black/40 border border-slate-700 p-6 rounded-[2rem] backdrop-blur-sm">
+                       <h4 className="text-[8px] font-black text-blue-400 uppercase tracking-widest mb-4">Como funciona:</h4>
+                       <ul className="text-[9px] text-slate-500 space-y-3 font-bold uppercase tracking-[0.05em]">
+                          <li className="flex gap-2">
+                             <span className="text-blue-500">01.</span>
+                             <span>O <span className="text-slate-300">backend local</span> roda no seu PC.</span>
+                          </li>
+                          <li className="flex gap-2">
+                             <span className="text-blue-500">02.</span>
+                             <span>Ao clicar <span className="text-slate-300">Master Scan</span>, ele abre navegador.</span>
+                          </li>
+                          <li className="flex gap-2">
+                             <span className="text-blue-500">03.</span>
+                             <span>Usa seu <span className="text-slate-300">perfil logado</span> no Morada AI.</span>
+                          </li>
+                          <li className="flex gap-2">
+                             <span className="text-blue-500">04.</span>
+                             <span>O navegador <span className="text-slate-300">fecha em 2 min</span> após scan.</span>
+                          </li>
+                       </ul>
+                    </div>
+                 </div>
+              </div>
+            )}
           </div>
 
-          {/* Automação Section */}
-          <div className="bg-[#0a0a0c] border border-white/[0.03] p-8 rounded-3xl relative overflow-hidden group">
-            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                <Database size={60} />
-            </div>
-            
-            <div className="flex items-center gap-3 mb-8">
-               <div className="w-8 h-8 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400">
-                  <ShieldCheck size={16} />
+          {/* Notificações e Relatórios (ALL) */}
+          <div className="bg-[#0a0a0c] border border-white/[0.03] rounded-3xl relative overflow-hidden group">
+            <button 
+              onClick={() => setActiveSection(activeSection === 'notifications' ? '' : 'notifications')}
+              className="w-full p-6 flex items-center justify-between transition-all hover:bg-white/[0.02]"
+            >
+               <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400">
+                     <ShieldCheck size={16} />
+                  </div>
+                  <h3 className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Notificações e Relatório em PDF</h3>
                </div>
-               <h3 className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Credenciais Morada AI</h3>
-            </div>
+               {activeSection === 'notifications' ? <ChevronUp size={16} className="text-slate-500" /> : <ChevronDown size={16} className="text-slate-500" />}
+            </button>
             
-            <div className="space-y-6 relative z-10">
-              <div className="space-y-2">
-                <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest pl-1">Login de Acesso</label>
-                <input 
-                  type="text" 
-                  value={config.morada_login}
-                  onChange={e => setConfig({...config, morada_login: e.target.value})}
-                  className="w-full bg-[#0d0d10] border border-white/5 rounded-2xl px-5 py-4 text-[11px] font-medium text-white focus:border-blue-500/50 focus:outline-none transition-all placeholder:text-white/10 shadow-inner"
-                  placeholder="E-mail ou Usuário"
-                />
-              </div>
+            {activeSection === 'notifications' && (
+              <div className="px-6 pb-6 relative z-10 space-y-6 mt-2">
+                 <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none text-indigo-500 hidden md:block">
+                     <Database size={60} />
+                 </div>
+                 <div className="space-y-2">
+                   <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest pl-1">Seu E-mail (Para Envio)</label>
+                   <input 
+                     type="email" 
+                     value={config.email_sender}
+                     onChange={e => setConfig({...config, email_sender: e.target.value})}
+                     className="w-full max-w-2xl bg-slate-900/50 border border-slate-700 rounded-2xl px-5 py-4 text-[11px] font-medium text-white focus:border-indigo-500/50 focus:outline-none transition-all placeholder:text-slate-400 shadow-inner"
+                     placeholder="seuemail@outlook.com ou gmail"
+                   />
+                 </div>
 
-              <div className="space-y-2">
-                <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest pl-1">Senha Segura</label>
-                <input 
-                  type="password" 
-                  value={config.morada_pass}
-                  onChange={e => setConfig({...config, morada_pass: e.target.value})}
-                  className="w-full bg-[#0d0d10] border border-white/5 rounded-2xl px-5 py-4 text-[11px] font-medium text-white focus:border-blue-500/50 focus:outline-none transition-all placeholder:text-white/10 shadow-inner"
-                  placeholder="••••••••"
-                />
+                 <div className="space-y-2">
+                   <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest pl-1">Senha (ou Senha de App SMTP)</label>
+                   <input 
+                     type="password" 
+                     value={config.email_password}
+                     onChange={e => setConfig({...config, email_password: e.target.value})}
+                     className="w-full max-w-2xl bg-slate-900/50 border border-slate-700 rounded-2xl px-5 py-4 text-[11px] font-medium text-white focus:border-indigo-500/50 focus:outline-none transition-all placeholder:text-slate-400 shadow-inner"
+                     placeholder="••••••••"
+                   />
+                 </div>
+                 
+                 <div className="space-y-2">
+                   <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest pl-1">E-mails que Receberão o PDF (separar por vírgula)</label>
+                   <input 
+                     type="text" 
+                     value={config.email_recipient}
+                     onChange={e => setConfig({...config, email_recipient: e.target.value})}
+                     className="w-full max-w-2xl bg-slate-900/50 border border-slate-700 rounded-2xl px-5 py-4 text-[11px] font-medium text-white focus:border-indigo-500/50 focus:outline-none transition-all placeholder:text-slate-400 shadow-inner"
+                     placeholder="gestor1@hmouraleite.com.br, gestor2@hmouraleite.com.br"
+                   />
+                 </div>
               </div>
-            </div>
+            )}
           </div>
 
-          {/* Notificações e Relatórios */}
-          <div className="bg-[#0a0a0c] border border-white/[0.03] p-8 rounded-3xl relative overflow-hidden group">
-            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                <Database size={60} />
-            </div>
-            
-            <div className="flex items-center gap-3 mb-8">
-               <div className="w-8 h-8 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400">
-                  <ShieldCheck size={16} />
-               </div>
-               <h3 className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Notificação e Relatório em PDF</h3>
-            </div>
-            
-            <div className="space-y-6 relative z-10">
-              <div className="space-y-2">
-                <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest pl-1">Seu E-mail (Para Envio)</label>
-                <input 
-                  type="email" 
-                  value={config.email_sender}
-                  onChange={e => setConfig({...config, email_sender: e.target.value})}
-                  className="w-full bg-[#0d0d10] border border-white/5 rounded-2xl px-5 py-4 text-[11px] font-medium text-white focus:border-indigo-500/50 focus:outline-none transition-all placeholder:text-white/10 shadow-inner"
-                  placeholder="seuemail@outlook.com ou gmail"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest pl-1">Senha (ou Senha de App SMTP)</label>
-                <input 
-                  type="password" 
-                  value={config.email_password}
-                  onChange={e => setConfig({...config, email_password: e.target.value})}
-                  className="w-full bg-[#0d0d10] border border-white/5 rounded-2xl px-5 py-4 text-[11px] font-medium text-white focus:border-indigo-500/50 focus:outline-none transition-all placeholder:text-white/10 shadow-inner"
-                  placeholder="••••••••"
-                />
-              </div>
+          {/* Credenciais Morada AI (ADMIN ONLY) */}
+          {isAdmin && (
+            <div className="bg-[#0a0a0c] border border-white/[0.03] rounded-3xl relative overflow-hidden group">
+              <button 
+                onClick={() => setActiveSection(activeSection === 'morada' ? '' : 'morada')}
+                className="w-full p-6 flex items-center justify-between transition-all hover:bg-white/[0.02]"
+              >
+                 <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400">
+                       <ShieldCheck size={16} />
+                    </div>
+                    <div className="flex flex-col items-start">
+                       <h3 className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Credenciais Morada AI</h3>
+                       <span className="text-[8px] font-bold text-red-500 uppercase tracking-widest mt-1">Acesso Restrito - Admin</span>
+                    </div>
+                 </div>
+                 {activeSection === 'morada' ? <ChevronUp size={16} className="text-slate-500" /> : <ChevronDown size={16} className="text-slate-500" />}
+              </button>
               
-              <div className="space-y-2">
-                <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest pl-1">E-mails que Receberão o PDF (separar por vírgula)</label>
-                <input 
-                  type="text" 
-                  value={config.email_recipient}
-                  onChange={e => setConfig({...config, email_recipient: e.target.value})}
-                  className="w-full bg-[#0d0d10] border border-white/5 rounded-2xl px-5 py-4 text-[11px] font-medium text-white focus:border-indigo-500/50 focus:outline-none transition-all placeholder:text-white/10 shadow-inner"
-                  placeholder="gestor1@hmouraleite.com.br, gestor2@hmouraleite.com.br"
-                />
-              </div>
-            </div>
-          </div>
+              {activeSection === 'morada' && (
+                <div className="px-6 pb-6 relative z-10 space-y-6 mt-2">
+                   <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none text-blue-500 hidden md:block">
+                       <Database size={60} />
+                   </div>
+                   <div className="space-y-2">
+                     <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest pl-1">Login de Acesso</label>
+                     <input 
+                       type="text" 
+                       value={config.morada_login}
+                       onChange={e => setConfig({...config, morada_login: e.target.value})}
+                       className="w-full max-w-2xl bg-slate-900/50 border border-slate-700 rounded-2xl px-5 py-4 text-[11px] font-medium text-white focus:border-blue-500/50 focus:outline-none transition-all placeholder:text-slate-400 shadow-inner"
+                       placeholder="E-mail ou Usuário"
+                     />
+                   </div>
 
-          {/* Motor de Inteligência - DUAL ENGINE */}
-          <div className="bg-[#0a0a0c] border border-white/[0.03] p-8 rounded-3xl relative overflow-hidden group border-emerald-500/10">
-            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity text-emerald-500">
-                <Cpu size={60} />
-            </div>
-
-            <div className="flex items-center gap-3 mb-8">
-               <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400">
-                  <Cpu size={16} />
-               </div>
-               <h3 className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Motor de Inteligência Dual</h3>
-            </div>
-            
-            <div className="space-y-6 relative z-10">
-              {/* GROQ - MOTOR PRIMÁRIO 100% GRÁTIS */}
-              <div className="space-y-2 p-4 bg-orange-500/[0.03] border border-orange-500/10 rounded-2xl">
-                <div className="flex items-center gap-2 mb-1">
-                   <Zap size={10} className="text-orange-400" />
-                   <label className="text-[8px] font-black text-orange-400 uppercase tracking-widest">Motor Primário — Groq (100% Grátis · 14.400 req/dia)</label>
+                   <div className="space-y-2">
+                     <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest pl-1">Senha Segura</label>
+                     <input 
+                       type="password" 
+                       value={config.morada_pass}
+                       onChange={e => setConfig({...config, morada_pass: e.target.value})}
+                       className="w-full max-w-2xl bg-slate-900/50 border border-slate-700 rounded-2xl px-5 py-4 text-[11px] font-medium text-white focus:border-blue-500/50 focus:outline-none transition-all placeholder:text-slate-400 shadow-inner"
+                       placeholder="••••••••"
+                     />
+                   </div>
                 </div>
-                <input 
-                  type="password" 
-                  value={config.groq_key || ''}
-                  onChange={e => setConfig({...config, groq_key: e.target.value})}
-                  className="w-full bg-[#0d0d10] border border-orange-500/20 rounded-2xl px-5 py-4 text-[11px] font-medium text-white focus:border-orange-500/50 focus:outline-none transition-all placeholder:text-white/10 shadow-inner"
-                  placeholder="gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                />
-                <p className="text-[7px] text-slate-500 uppercase font-bold tracking-wider leading-tight mt-1">100% GRÁTIS sem cartão! Pegue em: console.groq.com → API Keys → Create. Até 14.400 análises/dia!</p>
-              </div>
-
-              {/* GEMINI - FALLBACK GRÁTIS */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 mb-1">
-                   <Shield size={10} className="text-emerald-500/50" />
-                   <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Fallback — Gemini Free (Backup Grátis)</label>
-                </div>
-                <input 
-                  type="password" 
-                  value={config.openai_key}
-                  onChange={e => setConfig({...config, openai_key: e.target.value})}
-                  className="w-full bg-[#0d0d10] border border-white/5 rounded-2xl px-5 py-4 text-[11px] font-medium text-white focus:border-emerald-500/50 focus:outline-none transition-all placeholder:text-white/10 shadow-inner"
-                  placeholder="AIzaSy... (Google Gemini) ou sk-... (OpenAI)"
-                />
-                <p className="text-[7px] text-slate-600 uppercase font-bold tracking-wider leading-tight mt-1">Chave de backup. Ativada automaticamente se o Groq atingir rate-limit.</p>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest pl-1">Período Padrão de Auditoria</label>
-                <select 
-                  value={config.periodo_analise}
-                  onChange={e => setConfig({...config, periodo_analise: e.target.value})}
-                  className="w-full bg-[#0d0d10] border border-white/5 rounded-2xl px-5 py-4 text-[11px] font-black text-white focus:border-emerald-500/50 focus:outline-none transition-all cursor-pointer appearance-none uppercase"
-                >
-                  <option value="24h">Últimas 24 Horas</option>
-                  <option value="Semana">Última Semana</option>
-                  <option value="Mês">Todo o Histórico</option>
-                </select>
-              </div>
+              )}
             </div>
-          </div>
+          )}
+
+          {/* Motor de Inteligência (ADMIN ONLY) */}
+          {isAdmin && (
+            <div className="bg-[#0a0a0c] border border-emerald-500/10 rounded-3xl relative overflow-hidden group">
+              <button 
+                onClick={() => setActiveSection(activeSection === 'engine' ? '' : 'engine')}
+                className="w-full p-6 flex items-center justify-between transition-all hover:bg-emerald-500/[0.02]"
+              >
+                 <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                       <Cpu size={16} />
+                    </div>
+                    <div className="flex flex-col items-start">
+                       <h3 className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Motor de Inteligência Dual</h3>
+                       <span className="text-[8px] font-bold text-red-500 uppercase tracking-widest mt-1">Acesso Restrito - Admin</span>
+                    </div>
+                 </div>
+                 {activeSection === 'engine' ? <ChevronUp size={16} className="text-slate-500" /> : <ChevronDown size={16} className="text-slate-500" />}
+              </button>
+              
+              {activeSection === 'engine' && (
+                <div className="px-6 pb-6 relative z-10 space-y-6 mt-2">
+                   <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none text-emerald-500 hidden md:block">
+                       <Cpu size={60} />
+                   </div>
+                   {/* GROQ - MOTOR PRIMÁRIO */}
+                   <div className="space-y-2 p-4 bg-orange-500/[0.03] border border-orange-500/10 rounded-2xl max-w-2xl">
+                     <div className="flex items-center gap-2 mb-1">
+                        <Zap size={10} className="text-orange-400" />
+                        <label className="text-[8px] font-black text-orange-400 uppercase tracking-widest">Motor Primário — Groq (100% Grátis · 14.400 req/dia)</label>
+                     </div>
+                     <input 
+                       type="password" 
+                       value={config.groq_key || ''}
+                       onChange={e => setConfig({...config, groq_key: e.target.value})}
+                       className="w-full bg-slate-900/50 border border-orange-500/20 rounded-2xl px-5 py-4 text-[11px] font-medium text-white focus:border-orange-500/50 focus:outline-none transition-all placeholder:text-slate-400 shadow-inner"
+                       placeholder="gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                     />
+                     <p className="text-[7px] text-slate-500 uppercase font-bold tracking-wider leading-tight mt-1">100% GRÁTIS sem cartão! Pegue em: console.groq.com → API Keys → Create. Até 14.400 análises/dia!</p>
+                   </div>
+
+                   {/* GEMINI - FALLBACK GRÁTIS */}
+                   <div className="space-y-2 max-w-2xl">
+                     <div className="flex items-center gap-2 mb-1">
+                        <Shield size={10} className="text-emerald-500/50" />
+                        <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Fallback — Gemini Free (Backup Grátis)</label>
+                     </div>
+                     <input 
+                       type="password" 
+                       value={config.openai_key}
+                       onChange={e => setConfig({...config, openai_key: e.target.value})}
+                       className="w-full bg-slate-900/50 border border-slate-700 rounded-2xl px-5 py-4 text-[11px] font-medium text-white focus:border-emerald-500/50 focus:outline-none transition-all placeholder:text-slate-400 shadow-inner"
+                       placeholder="AIzaSy... (Google Gemini) ou sk-... (OpenAI)"
+                     />
+                     <p className="text-[7px] text-slate-600 uppercase font-bold tracking-wider leading-tight mt-1">Chave de backup. Ativada automaticamente se o Groq atingir rate-limit.</p>
+                   </div>
+
+                   <div className="space-y-2 max-w-2xl">
+                     <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest pl-1">Período Padrão de Auditoria</label>
+                     <select 
+                       value={config.periodo_analise}
+                       onChange={e => setConfig({...config, periodo_analise: e.target.value})}
+                       className="w-full bg-slate-900/50 border border-slate-700 rounded-2xl px-5 py-4 text-[11px] font-black text-white focus:border-emerald-500/50 focus:outline-none transition-all cursor-pointer appearance-none uppercase"
+                     >
+                       <option value="24h">Últimas 24 Horas</option>
+                       <option value="Semana">Última Semana</option>
+                       <option value="Mês">Todo o Histórico</option>
+                     </select>
+                   </div>
+                </div>
+              )}
+            </div>
+          )}
+
         </div>
 
         {/* Footer Actions */}
-        <div className="flex flex-col md:flex-row items-center justify-between bg-[#0a0a0c] border border-white/[0.03] p-5 rounded-[2rem] gap-4">
+        <div className="flex flex-col md:flex-row items-center justify-between bg-[#0a0a0c] border border-white/[0.03] p-5 rounded-[2rem] gap-4 mb-10">
            <div className="flex items-center gap-4">
-             <div className="w-10 h-10 bg-[#0d0d10] rounded-2xl flex items-center justify-center border border-white/5">
+             <div className="w-10 h-10 bg-slate-900/50 rounded-2xl flex items-center justify-center border border-slate-700">
                 <div className={`w-2 h-2 rounded-full ${message ? 'bg-emerald-500 animate-pulse outline outline-4 outline-emerald-500/20' : 'bg-slate-700'}`} />
              </div>
              <div className="flex flex-col">

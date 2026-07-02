@@ -125,6 +125,7 @@ export default function Dashboard() {
   const handleForceUnlock = async () => {
     if (!confirm('O scan parece estar travado. Deseja forçar o desbloqueio?')) return;
     await setDoc(doc(db, 'system', 'lock'), { is_locked: false, locked_by: null, error: null }, { merge: true });
+    await setDoc(doc(db, 'system', 'scan_log'), { status: 'idle', message: 'Cancelado manualmente' }, { merge: true });
   };
 
   const handleScan = async () => {

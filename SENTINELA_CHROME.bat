@@ -20,7 +20,7 @@ set CHROME_PROFILE="%LOCALAPPDATA%\Google\Chrome\User Data"
 
 :: 3. Abre o Dashboard e o Morada AI no Chrome com porta de depuracao
 echo [SENTINELA] Abrindo Dashboard e Morada AI no Google Chrome...
-start "" %CHROME_PATH% --remote-debugging-port=9333 --remote-allow-origins=* --user-data-dir=%CHROME_PROFILE% "https://frontend-eight-ruddy-53.vercel.app/" "https://app.morada.ai/conversations"
+start "" %CHROME_PATH% --remote-debugging-port=9333 --remote-allow-origins=* --user-data-dir=%CHROME_PROFILE% --profile-directory="Profile 1" "https://frontend-eight-ruddy-53.vercel.app/" "https://app.morada.ai/conversations"
 timeout /t 3 /nobreak >nul 2>&1
 
 :: 4. Inicia o backend Python (motor de IA + listener Firebase)

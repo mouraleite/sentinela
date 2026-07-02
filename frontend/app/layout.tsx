@@ -19,6 +19,7 @@ export default function RootLayout({
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
         <meta name="description" content="Sentinela IA - AI Auditor para auditoria de leads" />
         <meta name="theme-color" content="#030712" />
+        <link rel="icon" href="/logo.png" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;700;900&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet" />
       </head>
       <body className="antialiased font-sans bg-[#030712] text-white selection:bg-blue-500/30 overflow-x-hidden min-h-screen">
