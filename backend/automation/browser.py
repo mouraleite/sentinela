@@ -147,26 +147,36 @@ window.closeSentinelaAura = () => {
 # Corrige inversão SDR/Lead, elimina labels e duplicatas combinadas
 # ═══════════════════════════════════════════════════════════════════
 CAPTURE_MESSAGES_JS = '''(leadName) => {
-    let chat = document.querySelector('.rt-Flex.overflow-y-auto.rt-r-fd-column-reverse');
+    let chat = null;
+    const centerEl = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
+    if (centerEl) {
+        let p = centerEl;
+        while(p && p !== document.body) {
+            const st = window.getComputedStyle(p);
+            if (['auto', 'scroll', 'overlay'].includes(st.overflowY) || ['auto', 'scroll', 'overlay'].includes(st.overflow)) {
+                chat = p; break;
+            }
+            p = p.parentElement;
+        }
+    }
     
-    if(!chat) {
-        const msgs = document.querySelectorAll('div[class*="bubble" i], [class*="message" i], [class*="ChatItem" i]');
-        const screenCenter = window.innerWidth / 2;
-        for (let msg of msgs) {
-            const r = msg.getBoundingClientRect();
-            const center = r.left + (r.width / 2);
-            if (Math.abs(center - screenCenter) < window.innerWidth * 0.25) {
-                let p = msg.parentElement;
-                while(p && p !== document.body) {
-                    const st = window.getComputedStyle(p);
-                    if (['auto', 'scroll', 'overlay'].includes(st.overflowY) || ['auto', 'scroll', 'overlay'].includes(st.overflow)) {
-                        chat = p; break;
-                    }
-                    p = p.parentElement;
+    // Fallback: Tenta achar a caixa de texto para digitar (onde só existe no chat)
+    if (!chat) {
+        const chatInput = document.querySelector('textarea[placeholder*="mensagem" i], div[contenteditable="true"]');
+        if (chatInput) {
+            let p = chatInput.parentElement;
+            while(p && p !== document.body) {
+                const st = window.getComputedStyle(p);
+                if (['auto', 'scroll', 'overlay'].includes(st.overflowY) || ['auto', 'scroll', 'overlay'].includes(st.overflow)) {
+                    chat = p; break;
                 }
-                if (chat) break;
+                p = p.parentElement;
             }
         }
+    }
+    
+    if (!chat) {
+        chat = document.querySelector('.rt-Flex.overflow-y-auto.rt-r-fd-column-reverse');
     }
     
     if(!chat) return [];
