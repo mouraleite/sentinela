@@ -133,6 +133,13 @@ window.updateSentinelaAura = (status, msg) => {
     auraFrame.style.boxShadow = `inset 0 0 100px ${color}66`;
     auraFrame.style.borderColor = `${color}4D`;
 };
+window.closeSentinelaAura = () => {
+    const root = document.getElementById('_sentinela_aura_root');
+    if (root) {
+        root.style.opacity = '0';
+        setTimeout(() => root.remove(), 500);
+    }
+};
 """
 
 # ═══════════════════════════════════════════════════════════════════
