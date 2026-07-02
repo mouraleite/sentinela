@@ -555,7 +555,6 @@ async def extract_morada_leads(period: str = "24h", custom_range: dict = None, s
                 _log_progress('error', f'Falha ao iniciar headless: {headless_err}')
                 raise Exception(f"Falha ao iniciar Chromium headless: {headless_err}")
         else:
-        else:
             # ═══ FASE 1: TENTAR CONECTAR AO CHROME EXISTENTE (via CDP 9333) ═══
             _log_progress('starting', 'Procurando Chrome aberto na porta 9333...')
             try:
