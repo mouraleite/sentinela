@@ -17,13 +17,13 @@ function ScoreBar({ score }: { score: number }) {
   const labelColor = isHot ? '#10b981' : isWarm ? '#f59e0b' : '#60a5fa';
 
   return (
-    <div className="w-full">
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Engajamento</span>
-        <span className="text-[12px] font-black" style={{ color: labelColor }}>{label}</span>
+    <div className="flex items-center gap-3 bg-white/[0.02] border border-white/[0.05] rounded-lg px-3 py-1.5">
+      <div className="flex flex-col">
+        <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Engajamento</span>
+        <span className="text-[10px] font-black" style={{ color: labelColor }}>{label}</span>
       </div>
-      <div className="flex items-center gap-3">
-        <div className="flex-1 h-2.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
+      <div className="flex items-center gap-2 w-24">
+        <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
           <div
             className="h-full rounded-full transition-all duration-700"
             style={{
@@ -34,7 +34,7 @@ function ScoreBar({ score }: { score: number }) {
           />
         </div>
         <span
-          className="text-[14px] font-black tabular-nums min-w-[32px] text-right"
+          className="text-xs font-black tabular-nums min-w-[24px] text-right"
           style={{ color: barColor }}
         >
           {s}
@@ -191,76 +191,73 @@ export default function LeadDetails({ lead, onClose, onStatusChange }: { lead: a
         </button>
 
         <div className="flex flex-col h-full overflow-hidden">
-          <div className="p-6 sm:p-8 shrink-0 border-b border-white/5 bg-white/[0.01]">
-            <div className="flex flex-col md:flex-row gap-6 justify-between items-start pr-8">
-              <div className="flex-1 flex flex-col gap-3">
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">SENTINELA INSPECTION</span>
-                <h2 className="text-2xl font-black text-white tracking-tight leading-none break-words">
-                  {lead.nome}
-                </h2>
-                
-                <div className="flex flex-wrap gap-2 mt-2">
-                  <span className="px-2.5 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded text-indigo-300 font-bold text-xs uppercase tracking-wide">
-                    {lead.empreendimento_detectado || 'EM AUDITORIA'}
-                  </span>
-                  {lead.tempo_medio_resposta && (
-                    <span className="px-2.5 py-1 bg-white/5 border border-white/10 rounded text-slate-300 font-medium text-xs">
-                      ⏱️ {lead.tempo_medio_resposta}
-                    </span>
-                  )}
-                  {lead.telefone && <span className="px-2.5 py-1 bg-white/5 border border-white/10 rounded text-slate-300 font-medium text-xs">📞 {lead.telefone}</span>}
-                  {lead.origem && <span className="px-2.5 py-1 bg-white/5 border border-white/10 rounded text-slate-300 font-medium text-xs">🌍 {lead.origem}</span>}
-                  {lead.etapa && <span className="px-2.5 py-1 bg-white/5 border border-white/10 rounded text-slate-300 font-medium text-xs">📍 {lead.etapa}</span>}
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-4 w-full md:w-64 shrink-0">
-                <div className="relative">
-                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">STATUS DA AUDITORIA</div>
-                  <button
-                    onClick={() => setShowStatusPicker(!showStatusPicker)}
-                    className="w-full px-4 py-2 rounded-lg text-xs font-black uppercase text-white hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-between shadow-lg"
-                    style={{ backgroundColor: color }}
-                  >
-                    <span>{currentStatus}</span>
-                    <span className="opacity-70 text-[10px]">▼</span>
-                  </button>
-                  {showStatusPicker && (
-                    <div className="absolute top-full right-0 mt-2 bg-[#1a1a1e] border border-white/10 rounded-xl shadow-2xl z-[300] overflow-hidden w-full">
-                      {STATUS_OPTIONS.map(opt => (
-                        <button
-                          key={opt.value}
-                          onClick={() => handleStatusChange(opt.value)}
-                          disabled={saving}
-                          className={`w-full text-left px-4 py-3 text-xs font-black uppercase tracking-wider flex items-center gap-2 hover:bg-white/5 transition-all ${currentStatus === opt.value ? 'bg-white/10' : ''}`}
-                        >
-                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: opt.color }} />
-                          <span className="text-white">{opt.label}</span>
-                          {currentStatus === opt.value && <span className="ml-auto text-[10px]">✓</span>}
-                        </button>
-                      ))}
-                    </div>
+          <div className="p-4 sm:p-5 shrink-0 border-b border-white/5 bg-white/[0.01]">
+            <div className="flex flex-col gap-3 pr-8">
+              
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <h2 className="text-xl font-black text-white tracking-tight leading-none break-words">
+                    {lead.nome}
+                  </h2>
+                  {lead.url_morada && (
+                    <a
+                      href={lead.url_morada}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center px-3 py-1 bg-blue-600/20 hover:bg-blue-600/40 rounded border border-blue-500/30 text-[10px] font-bold text-blue-400 uppercase tracking-widest transition-all"
+                    >
+                      ↗ Morada AI
+                    </a>
                   )}
                 </div>
 
-                <div className="p-3 bg-white/[0.02] rounded-xl border border-white/[0.05]">
+                <div className="flex items-center gap-3 shrink-0">
                   <ScoreBar score={lead.score_engajamento ?? 0} />
+                  
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowStatusPicker(!showStatusPicker)}
+                      className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase text-white hover:opacity-90 active:scale-[0.98] transition-all cursor-pointer flex items-center gap-2 shadow-sm border border-white/10"
+                      style={{ backgroundColor: color }}
+                    >
+                      <span>{currentStatus}</span>
+                      <span className="opacity-70 text-[8px]">▼</span>
+                    </button>
+                    {showStatusPicker && (
+                      <div className="absolute top-full right-0 mt-1 bg-[#1a1a1e] border border-white/10 rounded-lg shadow-2xl z-[300] overflow-hidden min-w-[140px]">
+                        {STATUS_OPTIONS.map(opt => (
+                          <button
+                            key={opt.value}
+                            onClick={() => handleStatusChange(opt.value)}
+                            disabled={saving}
+                            className={`w-full text-left px-3 py-2 text-[10px] font-black uppercase tracking-wider flex items-center gap-2 hover:bg-white/5 transition-all ${currentStatus === opt.value ? 'bg-white/10' : ''}`}
+                          >
+                            <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: opt.color }} />
+                            <span className="text-white">{opt.label}</span>
+                            {currentStatus === opt.value && <span className="ml-auto text-[8px]">✓</span>}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-
-            {lead.url_morada && (
-              <div className="mt-5">
-                <a
-                  href={lead.url_morada}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center px-4 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-xs font-black text-white uppercase tracking-widest transition-all w-full text-center"
-                >
-                  ↗ ABRIR CONVERSA NO MORADA AI
-                </a>
+              
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-2 py-0.5 bg-indigo-500/10 border border-indigo-500/20 rounded text-indigo-300 font-bold text-[10px] uppercase tracking-wide">
+                  {lead.empreendimento_detectado || 'EM AUDITORIA'}
+                </span>
+                {lead.tempo_medio_resposta && (
+                  <span className="px-2 py-0.5 bg-white/5 border border-white/10 rounded text-slate-300 font-medium text-[10px]">
+                    ⏱️ {lead.tempo_medio_resposta}
+                  </span>
+                )}
+                {lead.telefone && <span className="px-2 py-0.5 bg-white/5 border border-white/10 rounded text-slate-300 font-medium text-[10px]">📞 {lead.telefone}</span>}
+                {lead.origem && <span className="px-2 py-0.5 bg-white/5 border border-white/10 rounded text-slate-300 font-medium text-[10px]">🌍 {lead.origem}</span>}
+                {lead.etapa && <span className="px-2 py-0.5 bg-white/5 border border-white/10 rounded text-slate-300 font-medium text-[10px]">📍 {lead.etapa}</span>}
               </div>
-            )}
+
+            </div>
           </div>
 
           <div className="flex border-b border-white/5 bg-[#0a0a0c] px-6 sm:px-8 pt-4 shrink-0">
