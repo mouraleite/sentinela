@@ -140,7 +140,28 @@ window.updateSentinelaAura = (status, msg) => {
 # Corrige inversão SDR/Lead, elimina labels e duplicatas combinadas
 # ═══════════════════════════════════════════════════════════════════
 CAPTURE_MESSAGES_JS = '''(leadName) => {
-    const chat = document.querySelector('.rt-Flex.overflow-y-auto.rt-r-fd-column-reverse');
+    let chat = document.querySelector('.rt-Flex.overflow-y-auto.rt-r-fd-column-reverse');
+    
+    if(!chat) {
+        const msgs = document.querySelectorAll('div[class*="bubble" i], [class*="message" i], [class*="ChatItem" i]');
+        const screenCenter = window.innerWidth / 2;
+        for (let msg of msgs) {
+            const r = msg.getBoundingClientRect();
+            const center = r.left + (r.width / 2);
+            if (Math.abs(center - screenCenter) < window.innerWidth * 0.25) {
+                let p = msg.parentElement;
+                while(p && p !== document.body) {
+                    const st = window.getComputedStyle(p);
+                    if (['auto', 'scroll', 'overlay'].includes(st.overflowY) || ['auto', 'scroll', 'overlay'].includes(st.overflow)) {
+                        chat = p; break;
+                    }
+                    p = p.parentElement;
+                }
+                if (chat) break;
+            }
+        }
+    }
+    
     if(!chat) return [];
     
     // Calcula o centro do container do chat na tela
@@ -162,20 +183,23 @@ CAPTURE_MESSAGES_JS = '''(leadName) => {
             // Fallbacks se tiver width 0 (display none)
             if (rect.width === 0 || rect.height === 0) continue;
             
-            const elementCenter = rect.left + (rect.width / 2);
+            // GEOMETRIA FÍSICA APRIMORADA (Análise de Margens)
+            const leftMargin = rect.left - chatRect.left;
+            const rightMargin = chatRect.right - rect.right;
             
-            // GEOMETRIA FÍSICA NA TELA (WhatsApp Style: Direita = Meu bot/SDR, Esquerda = Lead)
             let inferredSender = 'Lead';
-            if (elementCenter > centerPoint + 20) {
+            // Mensagens de sistema (ex: "Ontem", "10:00") costumam ser bem centralizadas e não muito largas
+            if (Math.abs(leftMargin - rightMargin) < 20 && rect.width < chatRect.width * 0.6) {
+                inferredSender = 'System';
+            } else if (rightMargin < leftMargin) {
+                // Está mais ancorado à direita -> Nosso SDR/Bot
                 inferredSender = 'SDR';
-            } else if (elementCenter < centerPoint - 20) {
-                inferredSender = 'Lead';
             } else {
-                 // Elementos de tela inteira centrais (alertas do sistema)
-                inferredSender = 'System'; 
+                // Está mais ancorado à esquerda -> Lead
+                inferredSender = 'Lead';
             }
             
-            leaves.push({ text: text, from: inferredSender, x: elementCenter });
+            leaves.push({ text: text, from: inferredSender, x: leftMargin });
         }
     }
     return leaves;
@@ -542,128 +566,304 @@ async def extract_morada_leads(period: str = "24h", custom_range: dict = None, s
             b_profile = browser_info["profile"]
             b_proc = browser_info["process_name"]
             
-            # ═══ FASE 2: CONECTAR AO NAVEGADOR ═══
-            # Estratégia: Conexão CDP direto → Se falhar, limpa porta 9333 órfã, reabre dedicado com Popen → Fallback Chromium headless
+            # ═══ FASE 2: ABRIR CHROME COM PERFIL PRINCIPAL DO USUÁRIO ═══
+            # Usa launch_persistent_context com o perfil real do Chrome do usuário.
+            # Isso garante que: cookies, sessões, localStorage, fingerprint, e o Cloudflare
+            # Turnstile funcionem exatamente como no Chrome normal do usuário.
+            chrome_user_data = b_profile  # Ex: %LOCALAPPDATA%\Google\Chrome\User Data
             
-            # TENTATIVA 1: CDP direto (Navegador já aberto com depuração)
+            diag_print(f"🚀 Abrindo Chrome com perfil principal do usuário: {chrome_user_data}")
+            
+            # Fecha o Chrome se estiver aberto (necessário para usar o perfil)
+            diag_print(f"🔒 Verificando se {b_proc} está em execução...")
             try:
-                diag_print(f"💻 [1/3] Tentando Conexão CDP Direta ({b_type}:9333)...")
-                browser = await pw.chromium.connect_over_cdp(CDP_URL, timeout=8000)
-                is_cdp = True
-                diag_print(f"💻 ✅ Conectado ao {b_type} via CDP Direto.")
-            except Exception as cdp_err:
-                diag_print(f"💻 CDP Direto inicial falhou: {cdp_err}. Tentando limpar a porta e abrir nova instância dedicada...")
-                
-                # Garante que a porta 9333 está completamente desocupada
-                kill_process_on_port(CDP_PORT)
-                await asyncio.sleep(1.5)
-                
-                # TENTATIVA 2: Abre navegador dedicado com perfil isolado (sem matar o Chrome pessoal do usuário!)
+                result = subprocess.run(
+                    ["tasklist", "/FI", f"IMAGENAME eq {b_proc}"],
+                    capture_output=True, text=True, shell=True
+                )
+                if b_proc.lower() in result.stdout.lower():
+                    diag_print(f"⚠️ {b_proc} está aberto. Fechando para liberar o perfil...")
+                    subprocess.run(["taskkill", "/F", "/IM", b_proc, "/T"], capture_output=True, shell=True)
+                    await asyncio.sleep(4)
+                    # Verifica se realmente fechou
+                    result2 = subprocess.run(
+                        ["tasklist", "/FI", f"IMAGENAME eq {b_proc}"],
+                        capture_output=True, text=True, shell=True
+                    )
+                    if b_proc.lower() in result2.stdout.lower():
+                        diag_print(f"⚠️ {b_proc} ainda em execução. Tentando novamente...")
+                        subprocess.run(["taskkill", "/F", "/IM", b_proc, "/T"], capture_output=True, shell=True)
+                        await asyncio.sleep(5)
+                    diag_print(f"✅ {b_proc} fechado com sucesso.")
+                else:
+                    diag_print(f"✅ {b_proc} não está em execução.")
+            except Exception as kill_err:
+                diag_print(f"⚠️ Erro ao verificar/fechar {b_proc}: {kill_err}")
+            
+            # Remove lock files do Chrome que impedem o Playwright de abrir o perfil
+            for lock_file in ["SingletonLock", "SingletonCookie", "SingletonSocket"]:
+                lock_path = os.path.join(chrome_user_data, lock_file)
                 try:
-                    diag_print(f"🚀 Lançando {b_type} dedicado: {b_exe}")
-                    subprocess.Popen([
-                        b_exe,
-                        f"--remote-debugging-port={CDP_PORT}",
-                        "--remote-allow-origins=*",
-                        f"--user-data-dir={b_profile}"
-                    ])
-
-                    # Retry progressivo para conectar ao CDP
-                    connected = False
-                    diag_print(f"⏳ Aguardando {b_type} inicializar e responder no CDP...")
-                    for attempt in range(1, 6):
-                        await asyncio.sleep(3)
-                        try:
-                            diag_print(f"🔄 Tentando conectar ao CDP (Tentativa {attempt}/5)...")
-                            browser = await pw.chromium.connect_over_cdp(CDP_URL, timeout=6000)
-                            is_cdp = True
-                            diag_print(f"✅ Conectado com sucesso ao {b_type} dedicado!")
-                            connected = True
-                            break
-                        except Exception as retry_err:
-                            diag_print(f"⚠️ Tentativa {attempt} de CDP falhou: {retry_err}")
-                            continue
-                    
-                    if not connected:
-                        raise Exception(f"Não foi possível conectar ao {b_type} via CDP após 5 tentativas de reinicialização")
-                        
-                except Exception as launch_err:
-                    diag_print(f"❌ Falha ao lançar {b_type} dedicado: {launch_err}")
-                    
-                    # TENTATIVA 3: Chromium headless (último recurso — silencioso em background)
-                    diag_print("💻 [3/3] Fallback: Chromium headless silencioso (segundo plano)...")
-                    try:
-                        browser = await pw.chromium.launch(headless=True, args=['--no-sandbox', '--disable-setuid-sandbox'])
-                        is_cdp = False
-                        diag_print("✅ Chromium headless conectado (fallback).")
-                    except Exception as headless_err:
-                        raise Exception(f"Todos os métodos de conexão falharam. Último erro: {headless_err}")
-        
-        # ═══ FASE 3: OBTER ABA / PÁGINA ═══
-        if is_cdp:
-            context = browser.contexts[0]
-            # Procura por uma aba do morada.ai existente para reaproveitar
-            page = next((pt for pt in context.pages if 'morada.ai' in pt.url), None)
+                    if os.path.exists(lock_path):
+                        os.remove(lock_path)
+                        diag_print(f"🗑️ Lock file removido: {lock_file}")
+                except Exception:
+                    pass
             
-            # Se não encontrar, procura por uma aba do login/autorização do morada
-            if not page:
-                page = next((pt for pt in context.pages if 'id.morada.ai' in pt.url or 'auth.morada.ai' in pt.url), None)
-                
-            # Se ainda não encontrar, procura por uma aba "about:blank" ou similar em branco para reaproveitar
-            if not page:
-                page = next((pt for pt in context.pages if 'about:blank' in pt.url or pt.url == ''), None)
-                
-            # Se não houver absolutamente nenhuma aba utilizável, cria uma nova
-            if not page:
-                page = await context.new_page()
-        else:
-            context = await browser.new_context()
-            # Se o navegador foi aberto agora pelo robô (nova instância separada),
-            # abrimos o dashboard do Sentinela e o Morada AI lado a lado no mesmo navegador
+            # Extrai cookies nativos do usuário invisivelmente
+            diag_print("🍪 Extraindo sessão ativa do navegador (browser_cookie3)...")
             try:
-                dash_page = await context.new_page()
-                diag_print(f"🌐 Novo Navegador: Abrindo Dashboard do Sentinela em {dashboard_url}")
-                await dash_page.goto(dashboard_url, timeout=30000, wait_until="domcontentloaded")
+                import browser_cookie3
+                cj = browser_cookie3.chrome(domain_name='morada.ai')
+                cookies = [{'name': c.name, 'value': c.value, 'domain': c.domain, 'path': c.path, 'secure': bool(c.secure)} for c in cj]
             except Exception as e:
-                diag_print(f"⚠️ Erro ao abrir Dashboard no novo navegador: {e}")
-                
+                diag_print(f"⚠️ Aviso ao extrair cookies do Chrome: {e}. Tentando Edge...")
+                try:
+                    import browser_cookie3
+                    cj = browser_cookie3.edge(domain_name='morada.ai')
+                    cookies = [{'name': c.name, 'value': c.value, 'domain': c.domain, 'path': c.path, 'secure': bool(c.secure)} for c in cj]
+                except Exception as e2:
+                    diag_print(f"⚠️ Erro ao extrair cookies do Edge: {e2}")
+                    cookies = []
+            
+            # Abre um navegador limpo VISÍVEL
+            diag_print("🚀 Iniciando motor Playwright limpo (sem conflitos com pasta do usuário)...")
+            browser = await pw.chromium.launch(
+                headless=False,
+                args=[
+                    "--start-maximized",
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-infobars",
+                ]
+            )
+            context = await browser.new_context(no_viewport=True)
+            
+            # Injeta cookies
+            if cookies:
+                diag_print(f"✅ Injetando {len(cookies)} cookies na sessão do robô...")
+                await context.add_cookies(cookies)
+            
             page = await context.new_page()
             
-        # Somente navega se não estivermos já na página certa ou na página de login do morada
-        current_url = page.url
-        if 'conversations' not in current_url and 'morada.ai' not in current_url:
-            try:
-                diag_print(f"🌐 Navegando aba existente ({current_url}) para conversations...")
-                await page.goto("https://app.morada.ai/conversations", timeout=60000, wait_until="domcontentloaded")
-                await page.bring_to_front()
-            except Exception as goto_err:
-                diag_print(f"⚠️ Erro ao navegar para conversations: {goto_err}")
-        else:
-            diag_print(f"🌐 Aba reaproveitada já está em URL do Morada: {current_url}")
             try:
                 await page.bring_to_front()
             except:
                 pass
             
-        # Se for modo headless e tivermos credenciais, tenta login automático
-        if not is_cdp and morada_login and morada_pass and morada_login != "your_login_here":
-            diag_print(f"🔐 Modo headless: Tentando login automático com {morada_login}...")
+            diag_print(f"🌐 Navegando para https://app.morada.ai/conversations...")
+            await page.goto("https://app.morada.ai/conversations", timeout=60000, wait_until="domcontentloaded")
             await asyncio.sleep(3)
+        
+        # ═══ FASE 3.5: LOGIN AUTOMÁTICO NO MORADA ═══
+        cur_url = page.url
+        diag_print(f"🌐 URL após navegação: {cur_url}")
+        
+        # Detecta se caiu na tela de login (SSO do Morada)
+        if '/conversations' not in cur_url and ('login' in cur_url or 'auth' in cur_url or 'id.morada' in cur_url):
+            diag_print(f"🔐 Tela de login detectada. Tentando login automático...")
+            
+            if morada_login and morada_pass and morada_login not in ("your_login_here", "seu_email_morada@example.com", ""):
+                try:
+                    # Aguarda o campo de email aparecer
+                    await asyncio.sleep(2)
+                    email_input = await page.wait_for_selector(
+                        'input[type="email"], input[name="email"], input[name="username"], input[placeholder*="email" i], input[placeholder*="Email" i]', 
+                        timeout=15000
+                    )
+                    if email_input:
+                        # Simula digitação humana (mais lento = menos detecção)
+                        await email_input.click()
+                        await asyncio.sleep(0.3)
+                        await email_input.fill(morada_login)
+                        diag_print(f"📧 Email preenchido: {morada_login}")
+                        
+                        # Procura campo de senha
+                        pass_input = await page.query_selector('input[type="password"]')
+                        if pass_input:
+                            await pass_input.click()
+                            await asyncio.sleep(0.3)
+                            await pass_input.fill(morada_pass)
+                            diag_print(f"🔑 Senha preenchida.")
+                            
+                            # ═══ AGUARDA CLOUDFLARE TURNSTILE RESOLVER ═══
+                            # O Turnstile usa um iframe de challenges.cloudflare.com
+                            # Precisamos esperar ele completar antes de submeter o formulário
+                            diag_print("🛡️ Aguardando Cloudflare Turnstile resolver...")
+                            turnstile_resolved = False
+                            for turnstile_wait in range(30):  # 30 * 2s = 60s max
+                                try:
+                                    # Verifica se o Turnstile completou verificando:
+                                    # 1. Se o input hidden cf-turnstile-response tem valor
+                                    # 2. Se o widget mostra sucesso (checkbox verde)
+                                    # 3. Se o iframe de challenge sumiu ou ficou em estado success
+                                    turnstile_status = await page.evaluate("""() => {
+                                        // Método 1: Input hidden com token do Turnstile
+                                        const hiddenInput = document.querySelector('input[name="cf-turnstile-response"], [name="cf-turnstile-response"]');
+                                        if (hiddenInput && hiddenInput.value && hiddenInput.value.length > 10) {
+                                            return 'resolved';
+                                        }
+                                        
+                                        // Método 2: Widget do Turnstile com classe de sucesso
+                                        const successWidget = document.querySelector('.cf-turnstile[data-status="solved"], .cf-turnstile-success, [data-turnstile-status="solved"]');
+                                        if (successWidget) {
+                                            return 'resolved';
+                                        }
+                                        
+                                        // Método 3: Verifica o iframe do Cloudflare
+                                        const iframes = document.querySelectorAll('iframe[src*="challenges.cloudflare.com"], iframe[src*="turnstile"]');
+                                        if (iframes.length === 0) {
+                                            // Sem iframe de challenge = possivelmente não tem Turnstile ou já resolveu
+                                            return 'no_turnstile';
+                                        }
+                                        
+                                        // Método 4: Busca pelo callback global do Turnstile
+                                        if (window.turnstile && typeof window.turnstile.getResponse === 'function') {
+                                            try {
+                                                const widgets = document.querySelectorAll('.cf-turnstile');
+                                                for (const w of widgets) {
+                                                    const wId = w.getAttribute('data-widget-id') || w.id;
+                                                    if (wId) {
+                                                        const resp = window.turnstile.getResponse(wId);
+                                                        if (resp && resp.length > 10) return 'resolved';
+                                                    }
+                                                }
+                                            } catch(e) {}
+                                        }
+                                        
+                                        // Método 5: Verifica se a mensagem de erro sumiu
+                                        const errorEl = document.querySelector('[class*="error"], [class*="falha"]');
+                                        const errorText = errorEl ? errorEl.textContent : '';
+                                        if (errorText.includes('Falha na verificação') || errorText.includes('verification failed')) {
+                                            return 'failed';
+                                        }
+                                        
+                                        return 'waiting';
+                                    }""")
+                                    
+                                    if turnstile_status == 'resolved':
+                                        diag_print("✅ Cloudflare Turnstile resolvido com sucesso!")
+                                        turnstile_resolved = True
+                                        break
+                                    elif turnstile_status == 'no_turnstile':
+                                        diag_print("ℹ️ Nenhum Turnstile detectado na página. Prosseguindo...")
+                                        turnstile_resolved = True
+                                        break
+                                    elif turnstile_status == 'failed':
+                                        diag_print(f"⚠️ Turnstile falhou (tentativa {turnstile_wait + 1}/30). Tentando recarregar widget...")
+                                        # Tenta resetar o Turnstile via API global
+                                        await page.evaluate("""() => {
+                                            try {
+                                                if (window.turnstile) {
+                                                    const widgets = document.querySelectorAll('.cf-turnstile');
+                                                    for (const w of widgets) {
+                                                        const wId = w.getAttribute('data-widget-id') || w.id;
+                                                        if (wId) window.turnstile.reset(wId);
+                                                    }
+                                                }
+                                            } catch(e) {}
+                                        }""")
+                                        await asyncio.sleep(3)
+                                    else:
+                                        if turnstile_wait % 5 == 0:
+                                            diag_print(f"⏳ Turnstile ainda verificando... ({turnstile_wait * 2}s)")
+                                        await asyncio.sleep(2)
+                                except Exception as ts_err:
+                                    diag_print(f"⚠️ Erro ao verificar Turnstile: {ts_err}")
+                                    await asyncio.sleep(2)
+                            
+                            if not turnstile_resolved:
+                                diag_print("⚠️ Timeout aguardando Turnstile (60s). Tentando submeter mesmo assim...")
+                            
+                            # Pequeno delay antes de clicar no botão (simula comportamento humano)
+                            await asyncio.sleep(1)
+                            
+                            # Clica no botão de login
+                            submit_btn = await page.query_selector(
+                                'button[type="submit"], button:has-text("Continuar"), button:has-text("Entrar"), button:has-text("Login"), button:has-text("Sign in"), button:has-text("Acessar")'
+                            )
+                            if submit_btn:
+                                await submit_btn.click()
+                                diag_print("🖱️ Botão de login clicado. Aguardando redirect...")
+                                
+                                # Aguarda até cair em /conversations
+                                for wait_i in range(30):  # 30 * 3s = 90s (mais tempo para Turnstile)
+                                    await asyncio.sleep(3)
+                                    check_url = page.url
+                                    if '/conversations' in check_url:
+                                        diag_print(f"✅ Login automático realizado com sucesso! URL: {check_url}")
+                                        break
+                                    
+                                    # Verifica se o Turnstile falhou novamente após o clique
+                                    try:
+                                        has_turnstile_error = await page.evaluate("""() => {
+                                            const el = document.body.innerText;
+                                            return el.includes('Falha na verificação') || el.includes('verification failed');
+                                        }""")
+                                        if has_turnstile_error:
+                                            diag_print(f"⚠️ Turnstile falhou novamente. Recarregando página para tentar novamente...")
+                                            await page.reload(wait_until="domcontentloaded")
+                                            await asyncio.sleep(5)
+                                            # Re-preenche credenciais após reload
+                                            try:
+                                                email_input2 = await page.wait_for_selector(
+                                                    'input[type="email"], input[name="email"], input[name="username"]', timeout=10000
+                                                )
+                                                if email_input2:
+                                                    await email_input2.fill(morada_login)
+                                                    pass_input2 = await page.query_selector('input[type="password"]')
+                                                    if pass_input2:
+                                                        await pass_input2.fill(morada_pass)
+                                                    # Aguarda Turnstile resolver novamente
+                                                    diag_print("🛡️ Aguardando Turnstile resolver após reload...")
+                                                    await asyncio.sleep(10)
+                                                    submit_btn2 = await page.query_selector(
+                                                        'button[type="submit"], button:has-text("Continuar"), button:has-text("Entrar")'
+                                                    )
+                                                    if submit_btn2:
+                                                        await submit_btn2.click()
+                                                        diag_print("🖱️ Botão de login clicado novamente após reload.")
+                                            except Exception:
+                                                pass
+                                    except Exception:
+                                        pass
+                                    
+                                    if wait_i % 5 == 0:
+                                        diag_print(f"⏳ Aguardando redirect... URL atual: {check_url}")
+                                else:
+                                    diag_print(f"⚠️ Login preenchido mas redirect não completou. URL: {page.url}")
+                            else:
+                                diag_print("⚠️ Botão de submit não encontrado. Tentando Enter...")
+                                await pass_input.press("Enter")
+                                await asyncio.sleep(5)
+                        else:
+                            diag_print("⚠️ Campo de senha não encontrado na página.")
+                    else:
+                        diag_print("⚠️ Campo de email não encontrado na página.")
+                except Exception as login_err:
+                    diag_print(f"⚠️ Erro no login automático: {login_err}")
+            else:
+                diag_print(f"⚠️ Credenciais do Morada não configuradas (morada_login={morada_login}). Aguardando login manual (3 min)...")
+                # Aguarda login manual
+                for check_idx in range(60):
+                    await asyncio.sleep(3)
+                    try:
+                        if '/conversations' in page.url:
+                            diag_print(f"✅ Login manual detectado! URL: {page.url}")
+                            break
+                    except:
+                        pass
+        
+        # Verifica se chegou na página de conversations
+        await asyncio.sleep(2)
+        final_url = page.url
+        diag_print(f"🌐 URL final: {final_url}")
+        
+        if '/conversations' not in final_url:
+            diag_print(f"⚠️ Não estamos em /conversations. Tentando navegar diretamente...")
             try:
-                email_input = await page.wait_for_selector('input[type="email"], input[name="email"], input[placeholder*="email" i]', timeout=10000)
-                if email_input:
-                    await email_input.fill(morada_login)
-                    pass_input = await page.query_selector('input[type="password"]')
-                    if pass_input:
-                        await pass_input.fill(morada_pass)
-                        submit_btn = await page.query_selector('button[type="submit"], button:has-text("Entrar"), button:has-text("Login")')
-                        if submit_btn:
-                            await submit_btn.click()
-                            await asyncio.sleep(5)
-                            await page.goto("https://app.morada.ai/conversations", timeout=60000, wait_until="domcontentloaded")
-                            diag_print("✅ Login automático realizado.")
-            except Exception as login_err:
-                diag_print(f"⚠️ Login automático falhou: {login_err}")
+                await page.goto("https://app.morada.ai/conversations", timeout=30000, wait_until="domcontentloaded")
+            except:
+                pass
                 
         await asyncio.sleep(3)
         
@@ -762,12 +962,13 @@ async def extract_morada_leads(period: str = "24h", custom_range: dict = None, s
         total_analyzed = 0
         total_skipped_period = 0
         total_old_leads_seen = 0  # apenas para log/diagnóstico, NÃO para parar o scan
+        consecutive_old_leads = 0 # para parar se formos muito fundo no passado
         
         diag_print(f"📋 Iniciando varredura de leads — Período: {period}")
         _log_progress('scanning', 'Iniciando varredura de leads...', total_seen=0)
         
-        # O loop roda enquanto encontrar leads novos ou ate atingir limite de iteracoes
-        for scroll_iter in range(150):
+        # O loop roda enquanto encontrar leads novos ou ate atingir limite de iteracoes (2500 leads max)
+        for scroll_iter in range(2500):
              # Re-busca a lista de elementos toda vez para evitar "Element is not attached to the DOM"
              leads = await page.query_selector_all('a[href*="/conversations/"]:not([href*="/groups/"])')
              
@@ -898,16 +1099,21 @@ async def extract_morada_leads(period: str = "24h", custom_range: dict = None, s
                   # para não perder nenhum lead por falha de parsing do timestamp
                   if lead_elapsed_hours < 0:
                       diag_print(f"⚠️ Lead '{name}': timestamp incerto ('{card_time_text[:40]}'). Incluindo no scan por segurança.")
+                      consecutive_old_leads = 0
                   elif lead_elapsed_hours > max_allowed_hours:
-                      # Lead fora do período: apenas pula (registra para log) mas CONTINUA o scan.
-                      # A lista do Morada AI NÃO é estritamente cronológica — pode haver leads recentes
-                      # abaixo de leads antigos. Por isso NUNCA paramos por leads antigos consecutivos;
-                      # varremos TODOS os leads visíveis e só paramos quando o DOM não retornar novos.
                       total_old_leads_seen += 1
                       total_skipped_period += 1
+                      consecutive_old_leads += 1
                       diag_print(f"⏭️ Lead '{name}' fora do período '{period}' ({lead_elapsed_hours:.1f}h > {max_allowed_hours}h). Pulando [{total_old_leads_seen} fora do período até agora]...")
                       _log_progress('scanning', f'Pulado (fora do período): {name}', current_lead=name, total_scanned=total_analyzed, total_skipped=total_skipped_period, total_seen=len(seen))
+                      
+                      if consecutive_old_leads >= 35:
+                          diag_print(f"🛑 35 leads consecutivos fora do período encontrados. Interrompendo a varredura por segurança.")
+                          break
+                          
                       continue
+                  else:
+                      consecutive_old_leads = 0
 
                   try:
                       await page.evaluate(f"window.updateSentinelaAura('scanning', 'Analisando: {name}')")
@@ -937,48 +1143,74 @@ async def extract_morada_leads(period: str = "24h", custom_range: dict = None, s
                   lead_url = await page.evaluate("window.location.href")
 
                   # Scroll do chat para carregar historico completo
-                  scroll_selector = '.rt-Flex.overflow-y-auto.rt-r-fd-column-reverse'
-                  await page.evaluate("""async (sel) => {
-                        // 1. Encontra o container flex do chat que contém as mensagens
-                        const chatFlex = document.querySelector(sel);
-                        if (!chatFlex) return;
-                        
-                        // 2. Encontra o ancestral que realmente possui a barra de rolagem (overflowY)
-                        let chatContainer = chatFlex;
-                        while (chatContainer && chatContainer !== document.body) {
-                             const style = window.getComputedStyle(chatContainer);
-                             if ((style.overflowY === 'auto' || style.overflowY === 'scroll') && chatContainer.scrollHeight > chatContainer.clientHeight) {
-                                  break;
-                             }
-                             chatContainer = chatContainer.parentElement;
-                        }
-                        
-                        if (!chatContainer) chatContainer = chatFlex; // Fallback
-                        
-                        chatContainer.click();
-                        let lastCount = 0;
-                        
-                        for (let i = 0; i < 25; i++) {
-                             const oldScrollHeight = chatContainer.scrollHeight;
-                             
-                             // Scroll para cima (tenta todas as convenções de scroll para compatibilidade)
-                             chatContainer.scrollTop = 0; 
-                             chatContainer.scrollBy(0, -10000);
-                             chatContainer.scrollTop = -10000;
-                             
-                             await new Promise(r => setTimeout(r, 800));
-                             
-                             // Conta quantas mensagens/balões existem no chat
-                             let currCount = chatFlex.querySelectorAll('div[class*="bubble" i], [class*="message" i], [class*="ChatItem" i], [class*="ListItem" i]').length;
-                             if (currCount === lastCount && i > 3) {
-                                  // Se a contagem não mudou e o scrollHeight também não mudou, terminamos de rolar
-                                  if (chatContainer.scrollHeight === oldScrollHeight) {
-                                       break;
+                  diag_print(f"⬆️ Rolando o chat para cima para carregar histórico completo...")
+                  
+                  # Clica no chat para dar foco, garantindo que eventos de teclado/scroll funcionem
+                  try:
+                      chat_box = page.locator('div[class*="bubble" i], [class*="message" i], [class*="ChatItem" i]').last
+                      await chat_box.click(force=True, timeout=2000)
+                  except:
+                      pass
+                  
+                  last_msg_count = 0
+                  for scroll_i in range(12):
+                      
+                      try:
+                          await page.evaluate("""() => {
+                              let chat = document.querySelector('.rt-Flex.overflow-y-auto.rt-r-fd-column-reverse');
+                              if (!chat) {
+                                  const msg = document.querySelector('div[class*="bubble" i], [class*="message" i], [class*="ChatItem" i]');
+                                  if (msg) {
+                                      let p = msg.parentElement;
+                                      while(p && p !== document.body) {
+                                          const st = window.getComputedStyle(p);
+                                          if (['auto', 'scroll', 'overlay'].includes(st.overflowY) || ['auto', 'scroll', 'overlay'].includes(st.overflow)) {
+                                              chat = p; break;
+                                          }
+                                          p = p.parentElement;
+                                      }
                                   }
-                             }
-                             lastCount = currCount;
-                        }
-                  }""", scroll_selector)
+                              }
+                              if(chat) { 
+                                  chat.scrollTop = 0; 
+                                  chat.scrollBy(0, -10000);
+                                  if(chat.scrollTop === 0) chat.scrollTop = -chat.scrollHeight;
+                                  const msgs = chat.querySelectorAll('div[class*="bubble" i], [class*="message" i], [class*="ChatItem" i]');
+                                  if(msgs.length > 0) msgs[0].scrollIntoView({ behavior: 'smooth', block: 'start' });
+                              }
+                          }""")
+                      except:
+                          pass
+                          
+                      await asyncio.sleep(0.5)
+                      
+                      curr_count = await page.evaluate("""() => document.querySelectorAll('div[class*="bubble" i], [class*="message" i], [class*="ChatItem" i]').length""")
+                      if curr_count == last_msg_count and scroll_i > 2:
+                          break
+                      last_msg_count = curr_count
+                  
+                  diag_print(f"⬇️ Rolando de volta para baixo...")
+                  try:
+                      await page.evaluate("""() => {
+                          let chat = document.querySelector('.rt-Flex.overflow-y-auto.rt-r-fd-column-reverse');
+                          if (!chat) {
+                              const msg = document.querySelector('div[class*="bubble" i], [class*="message" i], [class*="ChatItem" i]');
+                              if (msg) {
+                                  let p = msg.parentElement;
+                                  while(p && p !== document.body) {
+                                      const st = window.getComputedStyle(p);
+                                      if (['auto', 'scroll', 'overlay'].includes(st.overflowY) || ['auto', 'scroll', 'overlay'].includes(st.overflow)) {
+                                          chat = p; break;
+                                      }
+                                      p = p.parentElement;
+                                  }
+                              }
+                          }
+                          if(chat) { chat.scrollTop = chat.scrollHeight; }
+                      }""")
+                  except:
+                      pass
+                  await asyncio.sleep(1.0)
 
                   # EXTRAÇÃO DE DADOS MESTRE DO LEAD (Telefone, E-mail, Origem, Etapa, Produtos, Responsável)
                   lead_data = await page.evaluate("""() => {
@@ -1055,7 +1287,92 @@ async def extract_morada_leads(period: str = "24h", custom_range: dict = None, s
 
                   # CAPTURA V7.0 — Detecção Fiel ao Morada AI
                   raw_history = await page.evaluate(CAPTURE_MESSAGES_JS, header_name)
-                   
+                  if not raw_history: raw_history = []
+                  
+                  # === EXTRAÇÃO DE CONVERSAS ANTERIORES ===
+                  try:
+                      import re
+                      # Usamos locator com regex para bater "CONVERSAS ANTERIORES"
+                      conv_btn = page.locator('button, div[role="button"]').filter(has_text=re.compile(r'CONVERSAS ANTERIORES', re.IGNORECASE)).first
+                      
+                      if await conv_btn.is_visible():
+                          diag_print(f"🔄 Expandindo 'Conversas Anteriores'...")
+                          state = await conv_btn.get_attribute("data-state")
+                          if state != "open":
+                              await conv_btn.click(force=True, timeout=2000)
+                              await asyncio.sleep(1.5)
+                              
+                          num_items = await page.evaluate("""() => {
+                              const btn = Array.from(document.querySelectorAll('button, div[role="button"]')).find(b => b.textContent && b.textContent.includes('CONVERSAS ANTERIORES'));
+                              if (!btn) return 0;
+                              
+                              const parent = btn.closest('div[class*="item" i]') || btn.parentElement.parentElement;
+                              if (!parent) return 0;
+                              
+                              const items = Array.from(parent.querySelectorAll('button, div[role="button"], a')).filter(el => {
+                                  return el !== btn && !el.contains(btn) && !btn.contains(el);
+                              });
+                              
+                              let count = 0;
+                              items.forEach(el => {
+                                  el.setAttribute('data-sentinela-past', count);
+                                  count++;
+                              });
+                              return count;
+                          }""")
+                          
+                          if num_items > 0:
+                              diag_print(f"📚 Encontradas {num_items} conversas passadas! Lendo histórico...")
+                              past_history = []
+                              for i in range(num_items):
+                                  try:
+                                      item_loc = page.locator(f'[data-sentinela-past="{i}"]')
+                                      await item_loc.click(force=True, timeout=2000)
+                                      await asyncio.sleep(2.5) # Aguarda o chat carregar
+                                      
+                                      # Scroll para o topo para carregar o histórico desta aba
+                                      for _ in range(5):
+                                          try:
+                                              await page.evaluate("""() => {
+                                                  let chat = document.querySelector('.rt-Flex.overflow-y-auto.rt-r-fd-column-reverse');
+                                                  if (!chat) {
+                                                      const msg = document.querySelector('div[class*="bubble" i], [class*="message" i], [class*="ChatItem" i]');
+                                                      if (msg) {
+                                                          let p = msg.parentElement;
+                                                          while(p && p !== document.body) {
+                                                              const st = window.getComputedStyle(p);
+                                                              if (['auto', 'scroll', 'overlay'].includes(st.overflowY) || ['auto', 'scroll', 'overlay'].includes(st.overflow)) {
+                                                                  chat = p; break;
+                                                              }
+                                                              p = p.parentElement;
+                                                          }
+                                                      }
+                                                  }
+                                                  if(chat) { 
+                                                      chat.scrollTop = 0; 
+                                                      chat.scrollBy(0, -10000);
+                                                      if(chat.scrollTop === 0) chat.scrollTop = -chat.scrollHeight;
+                                                      chat.dispatchEvent(new WheelEvent('wheel', { deltaY: -15000, bubbles: true }));
+                                                      const msgs = chat.querySelectorAll('div[class*="bubble" i], [class*="message" i], [class*="ChatItem" i]');
+                                                      if(msgs.length > 0) msgs[0].scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                                  }
+                                              }""")
+                                          except:
+                                              pass
+                                      await asyncio.sleep(0.5)
+                                      
+                                      raw_past = await page.evaluate(CAPTURE_MESSAGES_JS, header_name)
+                                      if raw_past:
+                                          past_history.append({"text": f"--- HISTÓRICO ANTERIOR {i+1} ---", "from": "System", "x": 0})
+                                          past_history.extend(raw_past)
+                                  except Exception as item_err:
+                                      diag_print(f"⚠️ Erro ao ler item anterior {i}: {item_err}")
+                                      
+                              if past_history:
+                                  raw_history = past_history + raw_history
+                  except Exception as ce:
+                      diag_print(f"⚠️ Não foi possível ler conversas anteriores (ignorando): {ce}")
+
                   if not raw_history:
                       diag_print(f"⚠️ {header_name}: Nenhuma mensagem capturada no chat (DOM vazio). Pulando...")
                       continue
@@ -1088,7 +1405,8 @@ async def extract_morada_leads(period: str = "24h", custom_range: dict = None, s
                       "email": lead_data.get('email', ''),
                       "origem": lead_data.get('origem', ''),
                       "etapa": lead_data.get('etapa', ''),
-                      "produtos": lead_data.get('produtos', [])
+                      "produtos": lead_data.get('produtos', []),
+                      "tempo_ultima_interacao": card_time_text
                   })
                   analysis['nome'] = header_name
                   analysis['raw_messages'] = history_data
@@ -1235,17 +1553,9 @@ async def extract_morada_leads(period: str = "24h", custom_range: dict = None, s
             pass
         await asyncio.sleep(6)
         
-        # Sincroniza com Firebase Nuvem
-        try:
-            import firebase_db
-            db_data = safe_read_json(user_auditorias_file, {"auditores": []})
-            all_leads = []
-            for auditoria in db_data.get("auditores", []):
-                all_leads.extend(auditoria.get("leads", []))
-            if all_leads:
-                firebase_db.sync_leads_to_firebase(all_leads)
-        except Exception as fb_err:
-            diag_print(f"Erro ao sincronizar com nuvem: {fb_err}")
+        # Bulk sync removido: o sync individual por lead já cuida de atualizar a nuvem.
+        # Fazer bulk sync ressuscitava leads que o usuário apagou do dash.
+        diag_print("Sincronização de encerramento concluída.")
         
         # ═══ AUTO-CLOSE: Aguarda 2 minutos e fecha o navegador ═══
         if not is_cdp:
