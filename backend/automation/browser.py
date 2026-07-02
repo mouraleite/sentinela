@@ -148,36 +148,26 @@ window.closeSentinelaAura = () => {
 # ═══════════════════════════════════════════════════════════════════
 CAPTURE_MESSAGES_JS = '''(leadName) => {
     let chat = null;
-    const centerEl = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
-    if (centerEl) {
-        let p = centerEl;
-        while(p && p !== document.body) {
-            const st = window.getComputedStyle(p);
-            if (['auto', 'scroll', 'overlay'].includes(st.overflowY) || ['auto', 'scroll', 'overlay'].includes(st.overflow)) {
-                chat = p; break;
-            }
-            p = p.parentElement;
-        }
-    }
-    
-    // Fallback: Tenta achar a caixa de texto para digitar (onde só existe no chat)
-    if (!chat) {
-        const chatInput = document.querySelector('textarea[placeholder*="mensagem" i], div[contenteditable="true"]');
-        if (chatInput) {
-            let p = chatInput.parentElement;
-            while(p && p !== document.body) {
-                const st = window.getComputedStyle(p);
+            let minCenterDist = 999999;
+            const allNodes = document.querySelectorAll('*');
+            for (let n of allNodes) {
+                const st = window.getComputedStyle(n);
                 if (['auto', 'scroll', 'overlay'].includes(st.overflowY) || ['auto', 'scroll', 'overlay'].includes(st.overflow)) {
-                    chat = p; break;
+                    const r = n.getBoundingClientRect();
+                    // Ignora sidebars finas e menus
+                    if (r.width > 300 && r.height > 300) {
+                        const center = r.left + (r.width / 2);
+                        const dist = Math.abs(center - (window.innerWidth / 2));
+                        // Menor distância do centro = container principal de chat
+                        if (dist < minCenterDist) {
+                            if (n !== document.body && n !== document.documentElement) {
+                                minCenterDist = dist;
+                                chat = n;
+                            }
+                        }
+                    }
                 }
-                p = p.parentElement;
             }
-        }
-    }
-    
-    if (!chat) {
-        chat = document.querySelector('.rt-Flex.overflow-y-auto.rt-r-fd-column-reverse');
-    }
     
     if(!chat) return [];
     
@@ -1203,20 +1193,26 @@ async def extract_morada_leads(period: str = "24h", custom_range: dict = None, s
                       try:
                           await page.evaluate("""() => {
                               let chat = null;
-                                const centerEl = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
-                                if (centerEl) {
-                                    let p = centerEl;
-                                    while(p && p !== document.body) {
-                                        const st = window.getComputedStyle(p);
-                                        if (['auto', 'scroll', 'overlay'].includes(st.overflowY) || ['auto', 'scroll', 'overlay'].includes(st.overflow)) {
-                                            chat = p; break;
-                                        }
-                                        p = p.parentElement;
-                                    }
-                                }
-                                if (!chat) {
-                                    chat = document.querySelector('.rt-Flex.overflow-y-auto.rt-r-fd-column-reverse');
-                                }
+            let minCenterDist = 999999;
+            const allNodes = document.querySelectorAll('*');
+            for (let n of allNodes) {
+                const st = window.getComputedStyle(n);
+                if (['auto', 'scroll', 'overlay'].includes(st.overflowY) || ['auto', 'scroll', 'overlay'].includes(st.overflow)) {
+                    const r = n.getBoundingClientRect();
+                    // Ignora sidebars finas e menus
+                    if (r.width > 300 && r.height > 300) {
+                        const center = r.left + (r.width / 2);
+                        const dist = Math.abs(center - (window.innerWidth / 2));
+                        // Menor distância do centro = container principal de chat
+                        if (dist < minCenterDist) {
+                            if (n !== document.body && n !== document.documentElement) {
+                                minCenterDist = dist;
+                                chat = n;
+                            }
+                        }
+                    }
+                }
+            }
                               if(chat) { 
                                   chat.scrollTop = 0; 
                                   chat.scrollBy(0, -10000);
@@ -1239,20 +1235,26 @@ async def extract_morada_leads(period: str = "24h", custom_range: dict = None, s
                   try:
                       await page.evaluate("""() => {
                           let chat = null;
-                                const centerEl = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
-                                if (centerEl) {
-                                    let p = centerEl;
-                                    while(p && p !== document.body) {
-                                        const st = window.getComputedStyle(p);
-                                        if (['auto', 'scroll', 'overlay'].includes(st.overflowY) || ['auto', 'scroll', 'overlay'].includes(st.overflow)) {
-                                            chat = p; break;
-                                        }
-                                        p = p.parentElement;
-                                    }
-                                }
-                                if (!chat) {
-                                    chat = document.querySelector('.rt-Flex.overflow-y-auto.rt-r-fd-column-reverse');
-                                }
+            let minCenterDist = 999999;
+            const allNodes = document.querySelectorAll('*');
+            for (let n of allNodes) {
+                const st = window.getComputedStyle(n);
+                if (['auto', 'scroll', 'overlay'].includes(st.overflowY) || ['auto', 'scroll', 'overlay'].includes(st.overflow)) {
+                    const r = n.getBoundingClientRect();
+                    // Ignora sidebars finas e menus
+                    if (r.width > 300 && r.height > 300) {
+                        const center = r.left + (r.width / 2);
+                        const dist = Math.abs(center - (window.innerWidth / 2));
+                        // Menor distância do centro = container principal de chat
+                        if (dist < minCenterDist) {
+                            if (n !== document.body && n !== document.documentElement) {
+                                minCenterDist = dist;
+                                chat = n;
+                            }
+                        }
+                    }
+                }
+            }
                           if(chat) { chat.scrollTop = chat.scrollHeight; }
                       }""")
                   except:
@@ -1382,20 +1384,26 @@ async def extract_morada_leads(period: str = "24h", custom_range: dict = None, s
                                           try:
                                               await page.evaluate("""() => {
                                                   let chat = null;
-                                const centerEl = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
-                                if (centerEl) {
-                                    let p = centerEl;
-                                    while(p && p !== document.body) {
-                                        const st = window.getComputedStyle(p);
-                                        if (['auto', 'scroll', 'overlay'].includes(st.overflowY) || ['auto', 'scroll', 'overlay'].includes(st.overflow)) {
-                                            chat = p; break;
-                                        }
-                                        p = p.parentElement;
-                                    }
-                                }
-                                if (!chat) {
-                                    chat = document.querySelector('.rt-Flex.overflow-y-auto.rt-r-fd-column-reverse');
-                                }
+            let minCenterDist = 999999;
+            const allNodes = document.querySelectorAll('*');
+            for (let n of allNodes) {
+                const st = window.getComputedStyle(n);
+                if (['auto', 'scroll', 'overlay'].includes(st.overflowY) || ['auto', 'scroll', 'overlay'].includes(st.overflow)) {
+                    const r = n.getBoundingClientRect();
+                    // Ignora sidebars finas e menus
+                    if (r.width > 300 && r.height > 300) {
+                        const center = r.left + (r.width / 2);
+                        const dist = Math.abs(center - (window.innerWidth / 2));
+                        // Menor distância do centro = container principal de chat
+                        if (dist < minCenterDist) {
+                            if (n !== document.body && n !== document.documentElement) {
+                                minCenterDist = dist;
+                                chat = n;
+                            }
+                        }
+                    }
+                }
+            }
                                                   if(chat) { 
                                                       chat.scrollTop = 0; 
                                                       chat.scrollBy(0, -10000);
