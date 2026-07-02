@@ -1185,20 +1185,21 @@ async def extract_morada_leads(period: str = "24h", custom_range: dict = None, s
                       
                       try:
                           await page.evaluate("""() => {
-                              let chat = document.querySelector('.rt-Flex.overflow-y-auto.rt-r-fd-column-reverse');
-                              if (!chat) {
-                                  const msg = document.querySelector('div[class*="bubble" i], [class*="message" i], [class*="ChatItem" i]');
-                                  if (msg) {
-                                      let p = msg.parentElement;
-                                      while(p && p !== document.body) {
-                                          const st = window.getComputedStyle(p);
-                                          if (['auto', 'scroll', 'overlay'].includes(st.overflowY) || ['auto', 'scroll', 'overlay'].includes(st.overflow)) {
-                                              chat = p; break;
-                                          }
-                                          p = p.parentElement;
-                                      }
-                                  }
-                              }
+                              let chat = null;
+                                const centerEl = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
+                                if (centerEl) {
+                                    let p = centerEl;
+                                    while(p && p !== document.body) {
+                                        const st = window.getComputedStyle(p);
+                                        if (['auto', 'scroll', 'overlay'].includes(st.overflowY) || ['auto', 'scroll', 'overlay'].includes(st.overflow)) {
+                                            chat = p; break;
+                                        }
+                                        p = p.parentElement;
+                                    }
+                                }
+                                if (!chat) {
+                                    chat = document.querySelector('.rt-Flex.overflow-y-auto.rt-r-fd-column-reverse');
+                                }
                               if(chat) { 
                                   chat.scrollTop = 0; 
                                   chat.scrollBy(0, -10000);
@@ -1220,20 +1221,21 @@ async def extract_morada_leads(period: str = "24h", custom_range: dict = None, s
                   diag_print(f"⬇️ Rolando de volta para baixo...")
                   try:
                       await page.evaluate("""() => {
-                          let chat = document.querySelector('.rt-Flex.overflow-y-auto.rt-r-fd-column-reverse');
-                          if (!chat) {
-                              const msg = document.querySelector('div[class*="bubble" i], [class*="message" i], [class*="ChatItem" i]');
-                              if (msg) {
-                                  let p = msg.parentElement;
-                                  while(p && p !== document.body) {
-                                      const st = window.getComputedStyle(p);
-                                      if (['auto', 'scroll', 'overlay'].includes(st.overflowY) || ['auto', 'scroll', 'overlay'].includes(st.overflow)) {
-                                          chat = p; break;
-                                      }
-                                      p = p.parentElement;
-                                  }
-                              }
-                          }
+                          let chat = null;
+                                const centerEl = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
+                                if (centerEl) {
+                                    let p = centerEl;
+                                    while(p && p !== document.body) {
+                                        const st = window.getComputedStyle(p);
+                                        if (['auto', 'scroll', 'overlay'].includes(st.overflowY) || ['auto', 'scroll', 'overlay'].includes(st.overflow)) {
+                                            chat = p; break;
+                                        }
+                                        p = p.parentElement;
+                                    }
+                                }
+                                if (!chat) {
+                                    chat = document.querySelector('.rt-Flex.overflow-y-auto.rt-r-fd-column-reverse');
+                                }
                           if(chat) { chat.scrollTop = chat.scrollHeight; }
                       }""")
                   except:
@@ -1362,20 +1364,21 @@ async def extract_morada_leads(period: str = "24h", custom_range: dict = None, s
                                       for _ in range(5):
                                           try:
                                               await page.evaluate("""() => {
-                                                  let chat = document.querySelector('.rt-Flex.overflow-y-auto.rt-r-fd-column-reverse');
-                                                  if (!chat) {
-                                                      const msg = document.querySelector('div[class*="bubble" i], [class*="message" i], [class*="ChatItem" i]');
-                                                      if (msg) {
-                                                          let p = msg.parentElement;
-                                                          while(p && p !== document.body) {
-                                                              const st = window.getComputedStyle(p);
-                                                              if (['auto', 'scroll', 'overlay'].includes(st.overflowY) || ['auto', 'scroll', 'overlay'].includes(st.overflow)) {
-                                                                  chat = p; break;
-                                                              }
-                                                              p = p.parentElement;
-                                                          }
-                                                      }
-                                                  }
+                                                  let chat = null;
+                                const centerEl = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
+                                if (centerEl) {
+                                    let p = centerEl;
+                                    while(p && p !== document.body) {
+                                        const st = window.getComputedStyle(p);
+                                        if (['auto', 'scroll', 'overlay'].includes(st.overflowY) || ['auto', 'scroll', 'overlay'].includes(st.overflow)) {
+                                            chat = p; break;
+                                        }
+                                        p = p.parentElement;
+                                    }
+                                }
+                                if (!chat) {
+                                    chat = document.querySelector('.rt-Flex.overflow-y-auto.rt-r-fd-column-reverse');
+                                }
                                                   if(chat) { 
                                                       chat.scrollTop = 0; 
                                                       chat.scrollBy(0, -10000);
