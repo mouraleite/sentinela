@@ -147,27 +147,37 @@ window.closeSentinelaAura = () => {
 # Corrige inversão SDR/Lead, elimina labels e duplicatas combinadas
 # ═══════════════════════════════════════════════════════════════════
 CAPTURE_MESSAGES_JS = '''(leadName) => {
-    let chat = null;
-            let minCenterDist = 999999;
-            const allNodes = document.querySelectorAll('*');
-            for (let n of allNodes) {
-                const st = window.getComputedStyle(n);
-                if (['auto', 'scroll', 'overlay'].includes(st.overflowY) || ['auto', 'scroll', 'overlay'].includes(st.overflow)) {
-                    const r = n.getBoundingClientRect();
-                    // Ignora sidebars finas e menus
-                    if (r.width > 300 && r.height > 300) {
-                        const center = r.left + (r.width / 2);
-                        const dist = Math.abs(center - (window.innerWidth / 2));
-                        // Menor distância do centro = container principal de chat
-                        if (dist < minCenterDist) {
-                            if (n !== document.body && n !== document.documentElement) {
-                                minCenterDist = dist;
-                                chat = n;
-                            }
-                        }
+    let chat = document.querySelector('.rt-Flex.overflow-y-auto.rt-r-fd-column-reverse');
+    if (!chat) {
+        // Fallback: container com flex-direction column-reverse (padrão exclusivo de chat)
+        const divs = document.querySelectorAll('div, section, main');
+        for (let el of divs) {
+            const st = window.getComputedStyle(el);
+            if (st.flexDirection === 'column-reverse' &&
+                (['auto','scroll','overlay'].includes(st.overflowY) || ['auto','scroll','overlay'].includes(st.overflow))) {
+                const r = el.getBoundingClientRect();
+                if (r.width > 200 && r.height > 200) { chat = el; break; }
+            }
+        }
+    }
+    if (!chat) {
+        // Fallback 2: maior container scrollável à DIREITA da sidebar
+        const sidebarEnd = window.innerWidth * 0.3;
+        let bestArea = 0;
+        document.querySelectorAll('div, section, main, article').forEach(n => {
+            const st = window.getComputedStyle(n);
+            if (['auto','scroll','overlay'].includes(st.overflowY)) {
+                const r = n.getBoundingClientRect();
+                if (r.left >= sidebarEnd && r.width > 200 && r.height > 200) {
+                    const area = r.width * r.height;
+                    if (area > bestArea && n !== document.body && n !== document.documentElement) {
+                        bestArea = area;
+                        chat = n;
                     }
                 }
             }
+        });
+    }
     
     if(!chat) return [];
     
@@ -227,7 +237,6 @@ def clean_message_history(raw_history: list, lead_name: str) -> list:
              'negócio relacionado', 'em qualificação', 'produto', 'abrir arquivo',
              'pré-vendas', 'todos os filtros', 'exibir mais conectores']
 
-    import re
     history = []
     seen = set()
     
@@ -1192,27 +1201,37 @@ async def extract_morada_leads(period: str = "24h", custom_range: dict = None, s
                       
                       try:
                           await page.evaluate("""() => {
-                              let chat = null;
-            let minCenterDist = 999999;
-            const allNodes = document.querySelectorAll('*');
-            for (let n of allNodes) {
-                const st = window.getComputedStyle(n);
-                if (['auto', 'scroll', 'overlay'].includes(st.overflowY) || ['auto', 'scroll', 'overlay'].includes(st.overflow)) {
-                    const r = n.getBoundingClientRect();
-                    // Ignora sidebars finas e menus
-                    if (r.width > 300 && r.height > 300) {
-                        const center = r.left + (r.width / 2);
-                        const dist = Math.abs(center - (window.innerWidth / 2));
-                        // Menor distância do centro = container principal de chat
-                        if (dist < minCenterDist) {
-                            if (n !== document.body && n !== document.documentElement) {
-                                minCenterDist = dist;
-                                chat = n;
-                            }
-                        }
-                    }
-                }
-            }
+                              let chat = document.querySelector('.rt-Flex.overflow-y-auto.rt-r-fd-column-reverse');
+                              if (!chat) {
+                                  // Fallback: container com flex-direction column-reverse (padrão exclusivo de chat)
+                                  const divs = document.querySelectorAll('div, section, main');
+                                  for (let el of divs) {
+                                      const st = window.getComputedStyle(el);
+                                      if (st.flexDirection === 'column-reverse' &&
+                                          (['auto','scroll','overlay'].includes(st.overflowY) || ['auto','scroll','overlay'].includes(st.overflow))) {
+                                          const r = el.getBoundingClientRect();
+                                          if (r.width > 200 && r.height > 200) { chat = el; break; }
+                                      }
+                                  }
+                              }
+                              if (!chat) {
+                                  // Fallback 2: maior container scrollável à DIREITA da sidebar
+                                  const sidebarEnd = window.innerWidth * 0.3;
+                                  let bestArea = 0;
+                                  document.querySelectorAll('div, section, main, article').forEach(n => {
+                                      const st = window.getComputedStyle(n);
+                                      if (['auto','scroll','overlay'].includes(st.overflowY)) {
+                                          const r = n.getBoundingClientRect();
+                                          if (r.left >= sidebarEnd && r.width > 200 && r.height > 200) {
+                                              const area = r.width * r.height;
+                                              if (area > bestArea && n !== document.body && n !== document.documentElement) {
+                                                  bestArea = area;
+                                                  chat = n;
+                                              }
+                                          }
+                                      }
+                                  });
+                              }
                               if(chat) { 
                                   chat.scrollTop = 0; 
                                   chat.scrollBy(0, -10000);
@@ -1234,27 +1253,37 @@ async def extract_morada_leads(period: str = "24h", custom_range: dict = None, s
                   diag_print(f"⬇️ Rolando de volta para baixo...")
                   try:
                       await page.evaluate("""() => {
-                          let chat = null;
-            let minCenterDist = 999999;
-            const allNodes = document.querySelectorAll('*');
-            for (let n of allNodes) {
-                const st = window.getComputedStyle(n);
-                if (['auto', 'scroll', 'overlay'].includes(st.overflowY) || ['auto', 'scroll', 'overlay'].includes(st.overflow)) {
-                    const r = n.getBoundingClientRect();
-                    // Ignora sidebars finas e menus
-                    if (r.width > 300 && r.height > 300) {
-                        const center = r.left + (r.width / 2);
-                        const dist = Math.abs(center - (window.innerWidth / 2));
-                        // Menor distância do centro = container principal de chat
-                        if (dist < minCenterDist) {
-                            if (n !== document.body && n !== document.documentElement) {
-                                minCenterDist = dist;
-                                chat = n;
-                            }
-                        }
-                    }
-                }
-            }
+                          let chat = document.querySelector('.rt-Flex.overflow-y-auto.rt-r-fd-column-reverse');
+                          if (!chat) {
+                              // Fallback: container com flex-direction column-reverse (padrão exclusivo de chat)
+                              const divs = document.querySelectorAll('div, section, main');
+                              for (let el of divs) {
+                                  const st = window.getComputedStyle(el);
+                                  if (st.flexDirection === 'column-reverse' &&
+                                      (['auto','scroll','overlay'].includes(st.overflowY) || ['auto','scroll','overlay'].includes(st.overflow))) {
+                                      const r = el.getBoundingClientRect();
+                                      if (r.width > 200 && r.height > 200) { chat = el; break; }
+                                  }
+                              }
+                          }
+                          if (!chat) {
+                              // Fallback 2: maior container scrollável à DIREITA da sidebar
+                              const sidebarEnd = window.innerWidth * 0.3;
+                              let bestArea = 0;
+                              document.querySelectorAll('div, section, main, article').forEach(n => {
+                                  const st = window.getComputedStyle(n);
+                                  if (['auto','scroll','overlay'].includes(st.overflowY)) {
+                                      const r = n.getBoundingClientRect();
+                                      if (r.left >= sidebarEnd && r.width > 200 && r.height > 200) {
+                                          const area = r.width * r.height;
+                                          if (area > bestArea && n !== document.body && n !== document.documentElement) {
+                                              bestArea = area;
+                                              chat = n;
+                                          }
+                                      }
+                                  }
+                              });
+                          }
                           if(chat) { chat.scrollTop = chat.scrollHeight; }
                       }""")
                   except:
@@ -1340,7 +1369,6 @@ async def extract_morada_leads(period: str = "24h", custom_range: dict = None, s
                   
                   # === EXTRAÇÃO DE CONVERSAS ANTERIORES ===
                   try:
-                      import re
                       # Usamos locator com regex para bater "CONVERSAS ANTERIORES"
                       conv_btn = page.locator('button, div[role="button"]').filter(has_text=re.compile(r'CONVERSAS ANTERIORES', re.IGNORECASE)).first
                       
@@ -1383,27 +1411,37 @@ async def extract_morada_leads(period: str = "24h", custom_range: dict = None, s
                                       for _ in range(5):
                                           try:
                                               await page.evaluate("""() => {
-                                                  let chat = null;
-            let minCenterDist = 999999;
-            const allNodes = document.querySelectorAll('*');
-            for (let n of allNodes) {
-                const st = window.getComputedStyle(n);
-                if (['auto', 'scroll', 'overlay'].includes(st.overflowY) || ['auto', 'scroll', 'overlay'].includes(st.overflow)) {
-                    const r = n.getBoundingClientRect();
-                    // Ignora sidebars finas e menus
-                    if (r.width > 300 && r.height > 300) {
-                        const center = r.left + (r.width / 2);
-                        const dist = Math.abs(center - (window.innerWidth / 2));
-                        // Menor distância do centro = container principal de chat
-                        if (dist < minCenterDist) {
-                            if (n !== document.body && n !== document.documentElement) {
-                                minCenterDist = dist;
-                                chat = n;
-                            }
-                        }
-                    }
-                }
-            }
+                                                  let chat = document.querySelector('.rt-Flex.overflow-y-auto.rt-r-fd-column-reverse');
+                                                  if (!chat) {
+                                                      // Fallback: container com flex-direction column-reverse (padrão exclusivo de chat)
+                                                      const divs = document.querySelectorAll('div, section, main');
+                                                      for (let el of divs) {
+                                                          const st = window.getComputedStyle(el);
+                                                          if (st.flexDirection === 'column-reverse' &&
+                                                              (['auto','scroll','overlay'].includes(st.overflowY) || ['auto','scroll','overlay'].includes(st.overflow))) {
+                                                              const r = el.getBoundingClientRect();
+                                                              if (r.width > 200 && r.height > 200) { chat = el; break; }
+                                                          }
+                                                      }
+                                                  }
+                                                  if (!chat) {
+                                                      // Fallback 2: maior container scrollável à DIREITA da sidebar
+                                                      const sidebarEnd = window.innerWidth * 0.3;
+                                                      let bestArea = 0;
+                                                      document.querySelectorAll('div, section, main, article').forEach(n => {
+                                                          const st = window.getComputedStyle(n);
+                                                          if (['auto','scroll','overlay'].includes(st.overflowY)) {
+                                                              const r = n.getBoundingClientRect();
+                                                              if (r.left >= sidebarEnd && r.width > 200 && r.height > 200) {
+                                                                  const area = r.width * r.height;
+                                                                  if (area > bestArea && n !== document.body && n !== document.documentElement) {
+                                                                      bestArea = area;
+                                                                      chat = n;
+                                                                  }
+                                                              }
+                                                          }
+                                                      });
+                                                  }
                                                   if(chat) { 
                                                       chat.scrollTop = 0; 
                                                       chat.scrollBy(0, -10000);
